@@ -1,0 +1,117 @@
+{
+  "info": {
+    "name": "FastDelivery API",
+    "description": "API REST para gerenciamento de entregas — FastDelivery Platform",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "POST /entregas",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"descricao\": \"Buscar encomenda\",\n  \"origem\": \"Rua A, 100\",\n  \"destino\": \"Rua B, 200\",\n  \"cliente_id\": \"cliente-uuid-123\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5000/entregas",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5000",
+          "path": [
+            "entregas"
+          ]
+        },
+        "description": "Cria uma nova solicitação de entrega\n\nStatus esperado: 201 Created"
+      },
+      "response": []
+    },
+    {
+      "name": "GET /entregas",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5000/entregas",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5000",
+          "path": [
+            "entregas"
+          ],
+          "query": [
+            {
+              "key": "status",
+              "value": "pendente",
+              "disabled": true
+            }
+          ]
+        },
+        "description": "Lista todas as entregas\n\nParâmetro opcional: ?status=pendente|aceito|em_transito|concluido|cancelado\nStatus esperado: 200 OK"
+      },
+      "response": []
+    },
+    {
+      "name": "GET /entregas/<id>",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5000/entregas/1",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5000",
+          "path": [
+            "entregas",
+            "1"
+          ]
+        },
+        "description": "Consulta os detalhes de uma entrega específica\n\nStatus esperado: 200 OK ou 404 Not Found"
+      },
+      "response": []
+    },
+    {
+      "name": "PATCH /entregas/<id>/status",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"aceito\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5000/entregas/1/status",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5000",
+          "path": [
+            "entregas",
+            "1",
+            "status"
+          ]
+        },
+        "description": "Atualiza o status de uma entrega\n\nStatus inválidos serão rejeitados com 400 Bad Request\nEntrega inexistente retorna 404 Not Found\nStatus esperado: 200 OK"
+      },
+      "response": []
+    }
+  ]
+}
