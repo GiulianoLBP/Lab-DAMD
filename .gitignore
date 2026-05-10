@@ -3,3 +3,7 @@
 /Contexto
 CLAUDE.md
 /venv
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.db

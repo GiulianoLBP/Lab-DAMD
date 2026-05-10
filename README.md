@@ -241,6 +241,40 @@ curl -X PATCH http://localhost:5000/entregas/1/status \
 
 Importe o arquivo `postman_collection.json` na sua ferramenta de testes (Postman, Insomnia, etc.). A coleção contém todos os 4 endpoints pré-configurados com exemplos de request e documentação.
 
+### Evidências de execução
+
+Todos os endpoints foram testados com o servidor rodando localmente em `http://localhost:5000`.
+
+#### POST /entregas — Criar nova entrega
+
+![POST /entregas](docs/Image/POST-entregas.png)
+
+Cria uma nova solicitação com status inicial `pendente`. Retorna `201 Created` com o objeto completo.
+
+---
+
+#### GET /entregas — Listar todas as entregas
+
+![GET /entregas](docs/Image/GET-entregas.png)
+
+Lista todas as entregas cadastradas. Suporta filtro opcional `?status=<valor>`. Retorna `200 OK` com array de objetos.
+
+---
+
+#### GET /entregas/\<id\> — Consultar entrega por ID
+
+![GET /entregas/id](docs/Image/GET-entregas-id.png)
+
+Retorna os detalhes de uma entrega específica. Retorna `200 OK` com o objeto ou `404 Not Found` se o id não existir.
+
+---
+
+#### PATCH /entregas/\<id\>/status — Atualizar status
+
+![PATCH /entregas/id/status](docs/Image/PATCH-entregas-id-stauts.png)
+
+Atualiza o status de uma entrega existente. Retorna `200 OK` com o objeto atualizado, `400 Bad Request` para status inválido ou `404 Not Found` se o id não existir.
+
 ### Com curl
 
 Veja exemplos nos endpoints acima ou use:
