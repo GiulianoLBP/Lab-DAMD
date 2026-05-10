@@ -22,34 +22,41 @@ app/
 
 ### Pré-requisitos
 
-- Python 3.8+
+- Python 3.8+ (recomendado: 3.12)
 - pip (gerenciador de pacotes)
+
+> **Windows:** use sempre o comando `py` (Python Launcher) em vez de `python` para garantir que o interpretador correto seja usado.
 
 ### Passos
 
-1. **Clonar o repositório**
-   ```bash
+1. **Clonar o repositório e entrar na pasta do servidor**
+   ```powershell
    git clone <url-do-repositorio>
-   cd Lab-DAMD
+   cd Lab-DAMD\Code\server
    ```
 
-2. **Criar ambiente virtual (opcional, mas recomendado)**
-   ```bash
-   python -m venv venv
-   # Windows
-   venv\Scripts\activate
+2. **Criar ambiente virtual** (opcional, mas recomendado)
+   ```powershell
+   # Windows (PowerShell)
+   py -m venv venv
+   .\venv\Scripts\Activate.ps1
+
    # macOS/Linux
+   python3 -m venv venv
    source venv/bin/activate
    ```
 
-3. **Instalar dependências**
-   ```bash
+   > **Nota PowerShell:** se aparecer erro de política de execução, rode primeiro:
+   > `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
+
+3. **Instalar dependências** (dentro de `Code\server\`)
+   ```powershell
    pip install -r requirements.txt
    ```
 
-4. **Executar o servidor**
-   ```bash
-   python main.py
+4. **Executar o servidor** (dentro de `Code\server\`)
+   ```powershell
+   py main.py
    ```
 
    O servidor iniciará em `http://localhost:5000`
