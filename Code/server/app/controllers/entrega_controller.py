@@ -36,3 +36,17 @@ def obter_entrega(entrega_id):
         return jsonify(entrega.to_dict()), 200
     except EntregaNaoEncontrada:
         return jsonify({'error': 'Entrega não encontrada'}), 404
+
+
+@entrega_bp.route('/entregas/<int:entrega_id>/status', methods=['PATCH'])
+def atualizar_status(entrega_id):
+    dados = request.get_json(silent=True)
+    if not dados or 'status' not in dados:
+        return jsonify({'error': 'Campo "status" obrigatório'}), 400
+    try:
+        entrega = _use_cases.atualizar_status(entrega_id, dados['status'])
+        return jsonify(entrega.to_dict()), 200
+    except StatusInvalido:
+        return jsonify({'error': 'Status inválido'}), 400
+    except EntregaNaoEncontrada:
+        return jsonify({'error': 'Entrega não encontrada'}), 404
