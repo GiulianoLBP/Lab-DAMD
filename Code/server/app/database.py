@@ -1,5 +1,4 @@
 import sqlite3
-import os
 
 DB_PATH = 'entregas.db'
 
@@ -11,14 +10,11 @@ def get_connection():
 
 
 def init_db():
-    if os.path.exists(DB_PATH):
-        return
-
     conn = get_connection()
     cursor = conn.cursor()
 
     cursor.execute('''
-        CREATE TABLE entregas (
+        CREATE TABLE IF NOT EXISTS entregas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             descricao TEXT NOT NULL,
             origem TEXT NOT NULL,
