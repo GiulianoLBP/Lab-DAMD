@@ -25,6 +25,11 @@ class EntregaUseCases:
         if campos_faltando:
             raise ValueError(f"Campos obrigatórios ausentes: {', '.join(campos_faltando)}")
 
+        # Rejeita strings compostas só de espaços
+        campos_em_branco = [c for c in _CAMPOS_OBRIGATORIOS if not str(dados[c]).strip()]
+        if campos_em_branco:
+            raise ValueError(f"Campos não podem ser em branco: {', '.join(campos_em_branco)}")
+
         entrega = Entrega(
             descricao=dados['descricao'].strip(),
             origem=dados['origem'].strip(),
@@ -46,6 +51,8 @@ class EntregaUseCases:
         return entrega
 
     def atualizar_status(self, entrega_id: int, novo_status: str) -> Entrega:
+        if not isinstance(novo_status, str) or not novo_status.strip():
+            raise StatusInvalido("Status não pode ser vazio")
         if novo_status not in _STATUS_VALIDOS:
             raise StatusInvalido(f"Status inválido: '{novo_status}'")
 
