@@ -17,3 +17,22 @@ def criar_entrega():
         return jsonify(entrega.to_dict()), 201
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
+
+
+@entrega_bp.route('/entregas', methods=['GET'])
+def listar_entregas():
+    status = request.args.get('status', default=None)
+    try:
+        entregas = _use_cases.listar_entregas(status)
+        return jsonify([e.to_dict() for e in entregas]), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
+
+
+@entrega_bp.route('/entregas/<int:entrega_id>', methods=['GET'])
+def obter_entrega(entrega_id):
+    try:
+        entrega = _use_cases.buscar_entrega(entrega_id)
+        return jsonify(entrega.to_dict()), 200
+    except EntregaNaoEncontrada:
+        return jsonify({'error': 'Entrega não encontrada'}), 404
