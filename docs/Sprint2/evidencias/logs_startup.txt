@@ -1,0 +1,21 @@
+PS C:\Users\giuli\Dev\Lab-DAMD> $env:REDIS_HOST="localhost"; cd Code/server; py main.py
+2026-05-22 22:30:22 [INFO] app.mom.barramento: Barramento criado: Redis (via REDIS_HOST)
+2026-05-22 22:30:22 [INFO] FastDelivery: Banco SQLite inicializado
+2026-05-22 22:30:22 [INFO] app.mom.barramento: [Redis] Assinante registrado para "entrega.criada"
+2026-05-22 22:30:22 [INFO] app.mom.barramento: [Redis] Assinante registrado para "entrega.status_atualizado"
+2026-05-22 22:30:22 [INFO] app.mom.consumer: Consumidores registrados no barramento
+2026-05-22 22:30:22 [INFO] app.mom.consumer:   ↳ entrega.criada → handler ao_criar_entrega
+2026-05-22 22:30:22 [INFO] app.mom.consumer:   ↳ entrega.status_atualizado → handler ao_alterar_status
+2026-05-22 22:30:22 [INFO] app.mom.barramento: [Redis] Consumidor iniciado em thread daemon
+2026-05-22 22:30:22 [INFO] FastDelivery: MOM inicializado (mecanismo: redis)
+2026-05-22 22:30:22 [INFO] FastDelivery: ╔══════════════════════════════════════════════╗
+2026-05-22 22:30:22 [INFO] FastDelivery: ║       FastDelivery — Backend REST + MOM      ║
+2026-05-22 22:30:22 [INFO] FastDelivery: ║  Mecanismo MOM.: redis                      ║
+2026-05-22 22:30:22 [INFO] FastDelivery: ║  Endpoint......: http://localhost:5000       ║
+2026-05-22 22:30:22 [INFO] FastDelivery: ║  Eventos MOM...: GET /eventos                ║
+2026-05-22 22:30:22 [INFO] FastDelivery: ╚══════════════════════════════════════════════╝
+ * Serving Flask app 'main'
+ * Debug mode: on
+2026-05-22 22:30:22 [INFO] werkzeug: WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on http://127.0.0.1:5000
+2026-05-22 22:30:22 [INFO] werkzeug: Press CTRL+C to quit

@@ -1,0 +1,75 @@
+# Evidência de Fluxo: POST /entregas -> PATCH /entregas/id/status -> GET /eventos
+
+--- TERMINAL: CLIENTE (CLI) ---
+
+PS C:\Users\giuli\Dev\Lab-DAMD\Code\server> Invoke-RestMethod -Method Post -Uri "http://localhost:5000/entregas" -ContentType "application/json" -Body '{"descricao": "Pacote Teste MOM", "origem": "Rua A", "destino": "Rua B", "cliente_id": "cliente-123"}'
+
+atualizado_em : 2026-05-23 01:30:41
+cliente_id    : cliente-123
+criado_em     : 2026-05-23 01:30:41
+descricao     : Pacote Teste MOM
+destino       : Rua B
+id            : 5
+origem        : Rua A
+status        : pendente
+
+PS C:\Users\giuli\Dev\Lab-DAMD\Code\server> Invoke-RestMethod -Method Patch -Uri "http://localhost:5000/entregas/1/status" -ContentType "application/json" -Body '{"status": "aceito"}'
+
+(Sucesso 200 OK)
+
+PS C:\Users\giuli\Dev\Lab-DAMD\Code\server> Invoke-RestMethod -Uri "http://localhost:5000/eventos" | ConvertTo-Json -Depth 10
+[
+  {
+    "dados": {
+      "cliente_id": "cliente-123",
+      "descricao": "Pacote Teste MOM",
+      "destino": "Rua B",
+      "id": 5,
+      "origem": "Rua A",
+      "status": "pendente"
+    },
+    "evento": "entrega.criada",
+    "mensagem": "Nova entrega criada: Pacote Teste MOM",
+    "processado_em": "2026-05-22T22:30:41",
+    "tipo": "entrega.criada"
+  },
+  {
+    "dados": {
+      "cliente_id": "cliente-uuid-123",
+      "id": 1,
+      "status_anterior": "aceito",
+      "status_novo": "aceito"
+    },
+    "evento": "entrega.status_atualizado",
+    "mensagem": "Entrega #1 alterada para aceito",
+    "processado_em": "2026-05-22T22:30:41",
+    "tipo": "entrega.status_atualizado"
+  }
+]
+
+--- TERMINAL: SERVIDOR (LOGS) ---
+
+2026-05-22 22:30:41 [INFO] app.mom.barramento: [Redis] Publicado em "entrega.criada": {"evento": "entrega.criada", "dados": {"id": 5, "descricao": "Pacote Teste MOM", "origem": "Rua A", "destino": "Rua B", "status": "pendente", "cliente_id": "cliente-123"}, "timestamp": "2026-05-22T22:30:41"}
+2026-05-22 22:30:41 [INFO] app.mom.barramento: [Redis] Recebido de "entrega.criada": {"evento": "entrega.criada", "dados": {"id": 5, "descricao": "Pacote Teste MOM", "origem": "Rua A", "destino": "Rua B", "status": "pendente", "cliente_id": "cliente-123"}, "timestamp": "2026-05-22T22:30:41"}
+2026-05-22 22:30:41 [INFO] app.mom.producer: Evento publicado: entrega.criada (entrega #5)
+2026-05-22 22:30:41 [INFO] app.mom.consumer: ═══════════════════════════════════════════════
+2026-05-22 22:30:41 [INFO] werkzeug: 127.0.0.1 - - [22/May/2026 22:30:41] "POST /entregas HTTP/1.1" 201 -
+2026-05-22 22:30:41 [INFO] app.mom.consumer:   CONSUMIDOR → Nova entrega criada!
+2026-05-22 22:30:41 [INFO] app.mom.consumer:   ID: 5  |  Cliente: cliente-123
+2026-05-22 22:30:41 [INFO] app.mom.consumer:   Descrição: Pacote Teste MOM
+2026-05-22 22:30:41 [INFO] app.mom.consumer:   Status inicial: pendente
+2026-05-22 22:30:41 [INFO] app.mom.consumer:   [Simulação] Notificação enviada ao prestador
+2026-05-22 22:30:41 [INFO] app.mom.consumer:   [Simulação] Evento registrado no histórico
+2026-05-22 22:30:41 [INFO] app.mom.consumer: ═══════════════════════════════════════════════
+2026-05-22 22:30:41 [INFO] app.mom.barramento: [Redis] Publicado em "entrega.status_atualizado": {"evento": "entrega.status_atualizado", "dados": {"id": 1, "status_anterior": "aceito", "status_novo": "aceito", "cliente_id": "cliente-uuid-123"}, "timestamp": "2026-05-22T22:30:41"}
+2026-05-22 22:30:41 [INFO] app.mom.barramento: [Redis] Recebido de "entrega.status_atualizado": {"evento": "entrega.status_atualizado", "dados": {"id": 1, "status_anterior": "aceito", "status_novo": "aceito", "cliente_id": "cliente-uuid-123"}, "timestamp": "2026-05-22T22:30:41"}
+2026-05-22 22:30:41 [INFO] app.mom.producer: Evento publicado: entrega.status_atualizado (entrega #1: aceito → aceito)
+2026-05-22 22:30:41 [INFO] app.mom.consumer: ═══════════════════════════════════════════════
+2026-05-22 22:30:41 [INFO] werkzeug: 127.0.0.1 - - [22/May/2026 22:30:41] "PATCH /entregas/1/status HTTP/1.1" 200 -
+2026-05-22 22:30:41 [INFO] app.mom.consumer:   CONSUMIDOR → Status de entrega alterado!
+2026-05-22 22:30:41 [INFO] app.mom.consumer:   ID: 1  |  Cliente: cliente-uuid-123
+2026-05-22 22:30:41 [INFO] app.mom.consumer:   Status: aceito → aceito
+2026-05-22 22:30:41 [INFO] app.mom.consumer:   [Simulação] Notificação de status enviada ao cliente
+2026-05-22 22:30:41 [INFO] app.mom.consumer:   [Simulação] Evento registrado no histórico
+2026-05-22 22:30:41 [INFO] app.mom.consumer: ═══════════════════════════════════════════════
+2026-05-22 22:30:41 [INFO] werkzeug: 127.0.0.1 - - [22/May/2026 22:30:41] "GET /eventos HTTP/1.1" 200 -
