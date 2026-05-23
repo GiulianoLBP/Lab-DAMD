@@ -1,6 +1,10 @@
+import logging
 from typing import List, Optional
 from app.domain.models import Entrega, StatusEntrega
 from app.repositories.entrega_repository import EntregaRepository
+from app.mom.producer import EntregaEventProducer
+
+logger = logging.getLogger(__name__)
 
 # Exceções próprias permitem que o controller diferencie 400 de 404 sem acoplar HTTP a esta camada
 class EntregaNaoEncontrada(Exception):
@@ -17,8 +21,11 @@ _CAMPOS_OBRIGATORIOS = ('descricao', 'origem', 'destino', 'cliente_id')
 
 class EntregaUseCases:
 
-    def __init__(self, repository: EntregaRepository):
+    def __init__(self, repository: EntregaRepository,
+                 event_producer: Optional[EntregaEventProducer] = None):
         self.repository = repository
+        self.event_producer = event_producer
+        """Produtor de eventos MOM; se None, eventos não são disparados."""
 
     def criar_entrega(self, dados: dict) -> Entrega:
         campos_faltando = [c for c in _CAMPOS_OBRIGATORIOS if not dados.get(c)]
@@ -37,7 +44,22 @@ class EntregaUseCases:
             cliente_id=dados['cliente_id'].strip(),
             status=StatusEntrega.PENDENTE.value,
         )
-        return self.repository.create(entrega)
+        created = self.repository.create(entrega)
+
+        # ─── Evento MOM: entrega criada ───────────────────────────────
+        if self.event_producer:
+            self.event_producer.entrega_criada(
+                entrega_id=created.id,
+                dados={
+                    'descricao': created.descricao,
+                    'origem': created.origem,
+                    'destino': created.destino,
+                    'status': created.status,
+                    'cliente_id': created.cliente_id,
+                },
+            )
+
+        return created
 
     def listar_entregas(self, status: Optional[str] = None) -> List[Entrega]:
         if status is not None and status not in _STATUS_VALIDOS:
@@ -56,7 +78,24 @@ class EntregaUseCases:
         if novo_status not in _STATUS_VALIDOS:
             raise StatusInvalido(f"Status inválido: '{novo_status}'")
 
+        # Busca o status anterior antes de alterar (para o evento)
+        entrega_atual = self.repository.get_by_id(entrega_id)
+        if entrega_atual is None:
+            raise EntregaNaoEncontrada(f"Entrega {entrega_id} não encontrada")
+        status_anterior = entrega_atual.status
+
         entrega = self.repository.update_status(entrega_id, novo_status)
+        # O update_status já retorna None se não encontrou, mas já validamos acima
         if entrega is None:
             raise EntregaNaoEncontrada(f"Entrega {entrega_id} não encontrada")
+
+        # ─── Evento MOM: status alterado ──────────────────────────────
+        if self.event_producer:
+            self.event_producer.status_alterado(
+                entrega_id=entrega_id,
+                status_anterior=status_anterior,
+                status_novo=novo_status,
+                cliente_id=entrega.cliente_id,
+            )
+
         return entrega
