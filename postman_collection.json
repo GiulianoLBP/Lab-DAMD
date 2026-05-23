@@ -112,6 +112,56 @@
         "description": "Atualiza o status de uma entrega\n\nStatus inválidos serão rejeitados com 400 Bad Request\nEntrega inexistente retorna 404 Not Found\nStatus esperado: 200 OK"
       },
       "response": []
+    },
+    {
+      "name": "GET /eventos — Histórico MOM",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5000/eventos",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5000",
+          "path": [
+            "eventos"
+          ]
+        },
+        "description": "Recupera o histórico de eventos processados pelo consumidor MOM (máximo 100 eventos em memória)\n\nStatus esperado: 200 OK"
+      },
+      "response": [
+        {
+          "name": "Sucesso",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:5000/eventos",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "5000",
+              "path": [
+                "eventos"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "cookie": [],
+          "body": "[\n  {\n    \"entrega_id\": 4,\n    \"mensagem\": \"Nova entrega criada: Pacote teste\",\n    \"payload\": {\n      \"id\": 4,\n      \"descricao\": \"Pacote teste\",\n      \"origem\": \"Rua A\",\n      \"destino\": \"Rua B\",\n      \"status\": \"pendente\",\n      \"cliente_id\": \"cliente-123\",\n      \"criado_em\": \"2026-05-22T22:29:31\",\n      \"atualizado_em\": \"2026-05-22T22:29:31\"\n    },\n    \"processado_em\": \"2026-05-22T22:29:31\",\n    \"tipo\": \"entrega.criada\"\n  }\n]"
+        }
+      ]
     }
   ]
 }
