@@ -24,6 +24,7 @@ app/
 
 - Python 3.8+ (recomendado: 3.12)
 - pip (gerenciador de pacotes)
+- Docker e Docker Compose (para rodar o MOM Redis)
 
 > **Windows:** use sempre o comando `py` (Python Launcher) em vez de `python` para garantir que o interpretador correto seja usado.
 
@@ -35,7 +36,13 @@ app/
    cd Lab-DAMD\Code\server
    ```
 
-2. **Criar ambiente virtual** (opcional, mas recomendado)
+2. **Subir o Redis (MOM)**
+   A partir da Sprint 2, o sistema utiliza Redis para comunicação assíncrona.
+   ```powershell
+   docker compose up -d
+   ```
+
+3. **Criar ambiente virtual** (opcional, mas recomendado)
    ```powershell
    # Windows (PowerShell)
    py -m venv venv
@@ -56,10 +63,33 @@ app/
 
 4. **Executar o servidor** (dentro de `Code\server\`)
    ```powershell
+   # Modo padrão (com Redis rodando via Docker)
+   $env:REDIS_HOST = "localhost"
+   py main.py
+
+   # Modo Fallback (sem Redis — eventos em memória)
    py main.py
    ```
 
    O servidor iniciará em `http://localhost:5000`
+
+### Variáveis de Ambiente
+
+O sistema detecta automaticamente o mecanismo de mensageria:
+- `REDIS_HOST` ou `REDIS_URL`: ativa o **RedisEventBus** (Produção/Integração).
+- Caso omitidas: ativa o **InMemoryEventBus** (Desenvolvimento/Testes rápidos).
+
+## 🛰️ Sprint 2 — Integração com MOM
+
+O sistema implementa o padrão **Publish-Subscribe** para notificar eventos de entrega de forma assíncrona.
+
+- **Produtor:** `EntregaUseCases` dispara eventos ao criar ou atualizar status.
+- **Consumidor:** Uma thread daemon (`consumer.py`) escuta os tópicos e processa a lógica de negócio secundária (como logs e histórico).
+- **Broker:** Redis (Pub/Sub) via Docker.
+
+### Tópicos Disponíveis
+- `entrega.criada`: Disparado ao criar uma nova entrega.
+- `entrega.status_atualizado`: Disparado ao alterar o status de uma entrega.
 
 ## 📊 Schema do Banco de Dados
 
@@ -235,6 +265,34 @@ curl -X PATCH http://localhost:5000/entregas/1/status \
 
 ---
 
+### 5. GET /eventos
+
+**Listar eventos processados pelo consumidor MOM**
+
+**Request:**
+```bash
+# Obter últimos eventos (padrão 10)
+curl http://localhost:5000/eventos
+
+# Filtrar quantidade
+curl http://localhost:5000/eventos?ultimos=5
+```
+
+**Response (200 OK):**
+```json
+[
+  {
+    "tipo": "entrega.criada",
+    "entrega_id": 1,
+    "mensagem": "Nova entrega criada: Buscar encomenda",
+    "processado_em": "2026-05-22T10:00:00",
+    "payload": { "id": 1, "status": "pendente" }
+  }
+]
+```
+
+---
+
 ## 🧪 Testando a API
 
 ### Com Postman/Insomnia
@@ -312,16 +370,27 @@ Lab-DAMD/
 │       │   │   └── entrega_use_cases.py   # Lógica de negócio
 │       │   ├── controllers/
 │       │   │   └── entrega_controller.py  # Rotas Flask
+│       │   ├── mom/                       # Camada de mensageria (EventBus)
 │       │   └── database.py                # Conexão SQLite
 │       ├── main.py                        # Entry point
+│       ├── docker-compose.yml             # Infra Redis
 │       └── requirements.txt               # Dependências
-├── postman_collection.json                # Coleção de testes
+├── docs/
+│   └── Sprint2/                           # Documentação da Integração MOM
+├── postman_collection.json                # Coleção de testes (v2)
 └── README.md                              # Este arquivo
 ```
+
+## 📑 Documentação da Sprint 2
+
+- [Guia de Eventos e Tópicos](docs/Sprint2/eventos.md)
+- [Relatório Técnico de Integração](docs/Sprint2/Relatorio_Sprint2.md)
+- [Evidências de Execução MOM](docs/Sprint2/evidencias/)
 
 ## 🔧 Dependências
 
 - **Flask** — Framework web HTTP
+- **Redis** — Driver para integração com MOM
 - **SQLite3** — Banco de dados (já vem com Python)
 
 Veja `requirements.txt` para a versão exata.
@@ -332,6 +401,7 @@ Veja `requirements.txt` para a versão exata.
 - Timestamps utilizam formato ISO 8601 (UTC)
 - Todos os erros retornam JSON estruturado com campo `error`
 - A validação de status ocorre na camada de use cases
+- O modo Fallback (`InMemoryEventBus`) permite rodar o projeto sem Docker para fins de desenvolvimento rápido.
 
 ## 📋 Sprint 1 — Checklist
 
@@ -345,9 +415,19 @@ Veja `requirements.txt` para a versão exata.
 - [x] Coleção Postman
 - [x] README
 
+## 📋 Sprint 2 — Checklist (MOM)
+
+- [x] Barramento abstrato e implementações (Redis + Memory)
+- [x] Docker Compose para Redis local
+- [x] Produtor de eventos integrado aos Use Cases
+- [x] Consumidor em thread daemon com histórico
+- [x] Novo endpoint `GET /eventos`
+- [x] Diagrama C4 atualizado com MOM sólido
+- [x] Relatório de integração e catálogo de eventos
+- [x] Evidências de tráfego real no Redis (MONITOR)
+
 ## 📚 Próximas Fases
 
-**Sprint 2:** Integração com Message Queue (RabbitMQ ou Redis) para eventos assíncronos
 **Sprint 3:** App Flutter — Cliente
 **Sprint 4:** App Flutter — Entregador + Relatório Final
 
