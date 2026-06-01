@@ -32,7 +32,111 @@ Os dois eventos de negócio demonstrados são:
 | `entrega.criada` | Após criar uma entrega com `POST /entregas` | `EntregaEventProducer.entrega_criada()` | `_ao_criar_entrega()` |
 | `entrega.status_atualizado` | Após alterar o status com `PATCH /entregas/<id>/status` | `EntregaEventProducer.status_alterado()` | `_ao_alterar_status()` |
 
-## 2. Preparação
+## 2. Documentação dos eventos
+
+Esta seção atende diretamente ao requisito da Sprint 2:
+
+> Documentação dos eventos: tabela descrevendo cada evento (nome, produtor,
+> consumidor, payload JSON de exemplo, tópico/fila utilizado).
+
+Os dois eventos trafegam pela exchange RabbitMQ `fastdelivery.events`, do tipo
+`topic`. A routing key identifica o tipo do evento. A fila durável
+`fastdelivery.entregas` está ligada à exchange com a binding key `#`, portanto
+recebe os dois eventos.
+
+### 2.1 Tabela completa dos eventos
+
+| Nome do evento | Quando é publicado | Produtor | Consumidor | Tópico / routing key | Exchange | Fila utilizada |
+|---|---|---|---|---|---|---|
+| `entrega.criada` | Após `POST /entregas`, depois que a nova entrega é persistida no SQLite | `EntregaUseCases.criar_entrega()` chama `EntregaEventProducer.entrega_criada()` | `consumer_worker.py` executa o handler `_ao_criar_entrega()` | `entrega.criada` | `fastdelivery.events` | `fastdelivery.entregas` |
+| `entrega.status_atualizado` | Após `PATCH /entregas/<id>/status`, depois que o novo status é persistido no SQLite | `EntregaUseCases.atualizar_status()` chama `EntregaEventProducer.status_alterado()` | `consumer_worker.py` executa o handler `_ao_alterar_status()` | `entrega.status_atualizado` | `fastdelivery.events` | `fastdelivery.entregas` |
+
+### 2.2 Payload JSON de exemplo: `entrega.criada`
+
+```json
+{
+  "evento_id": "56f530c9-eead-46ee-b177-9751993ea072",
+  "evento": "entrega.criada",
+  "dados": {
+    "id": 7,
+    "descricao": "Pacote demonstracao Sprint 2",
+    "origem": "Rua A, 100",
+    "destino": "Rua B, 200",
+    "status": "pendente",
+    "cliente_id": "cliente-001"
+  },
+  "timestamp": "2026-06-01T18:54:38"
+}
+```
+
+Esse evento informa que uma nova solicitação foi criada. O consumidor pode usar
+os dados para notificar um prestador de serviço sobre uma nova entrega
+disponível.
+
+### 2.3 Payload JSON de exemplo: `entrega.status_atualizado`
+
+```json
+{
+  "evento_id": "07c41a9d-83a5-4ee0-9da2-cd6d97251ba7",
+  "evento": "entrega.status_atualizado",
+  "dados": {
+    "id": 7,
+    "status_anterior": "pendente",
+    "status_novo": "aceito",
+    "cliente_id": "cliente-001"
+  },
+  "timestamp": "2026-06-01T19:01:28"
+}
+```
+
+Esse evento informa a transição de estado da entrega. O consumidor pode usar os
+dados para notificar o cliente sobre o novo status.
+
+### 2.4 Campos comuns dos payloads
+
+| Campo | Finalidade |
+|---|---|
+| `evento_id` | UUID único usado para deduplicação e processamento idempotente |
+| `evento` | Nome do fato ocorrido e routing key usada na publicação |
+| `dados` | Informações específicas necessárias para processar o evento |
+| `timestamp` | Data e hora de criação do evento no formato ISO 8601 |
+
+### 2.5 Topologia RabbitMQ utilizada
+
+```text
+Backend Flask / Producer
+        |
+        | publica entrega.criada ou entrega.status_atualizado
+        v
+Exchange topic: fastdelivery.events
+        |
+        | binding key: #
+        v
+Fila durável: fastdelivery.entregas
+        |
+        | consumo com ack manual
+        v
+consumer_worker.py
+
+Em caso de falha no handler:
+fastdelivery.entregas -> fastdelivery.dlx -> fastdelivery.dlq
+```
+
+As configurações de confiabilidade utilizadas são:
+
+| Configuração | Valor | Finalidade |
+|---|---|---|
+| Exchange principal | `fastdelivery.events` | Receber os eventos publicados |
+| Tipo da exchange | `topic` | Permitir roteamento por routing key |
+| Fila principal | `fastdelivery.entregas` | Armazenar o backlog até o consumo |
+| Binding key | `#` | Capturar os eventos do domínio de entregas |
+| Dead-Letter Exchange | `fastdelivery.dlx` | Receber mensagens rejeitadas |
+| Dead-Letter Queue | `fastdelivery.dlq` | Isolar mensagens problemáticas |
+| Persistência da mensagem | `delivery_mode=2` | Manter mensagens persistentes |
+| Confirmação do consumer | `ack` manual | Remover a mensagem somente após sucesso |
+| Falha do consumer | `nack(requeue=False)` | Encaminhar a mensagem para a DLQ |
+
+## 3. Preparação
 
 Abra o Docker Desktop e aguarde o engine iniciar. Depois, abra um PowerShell:
 
@@ -75,7 +179,7 @@ RABBITMQ_PORT=5679
 
 O navegador continua acessando a UI normalmente pela porta `15672`.
 
-## 3. Terminal 1 - Broker RabbitMQ
+## 4. Terminal 1 - Broker RabbitMQ
 
 O Terminal 1 é usado para iniciar e conferir a infraestrutura:
 
@@ -106,7 +210,7 @@ Consumers: 0
 
 ![Fila inicial sem mensagens antigas](Sprint2/evidencias/rabbitmq/03-rabbitmq-fila-vazia.png)
 
-## 4. Terminal 2 - Backend produtor independente
+## 5. Terminal 2 - Backend produtor independente
 
 Abra outro PowerShell e inicie somente o backend Flask:
 
@@ -130,7 +234,7 @@ Consumidor in-process: OFF (use consumer_worker.py)
 
 ![Backend produtor independente](Sprint2/evidencias/rabbitmq/01-producer-independente.png)
 
-## 5. Terminal 3 - Cliente publica dois eventos
+## 6. Terminal 3 - Cliente publica dois eventos
 
 Com o consumer ainda desligado, abra um terceiro PowerShell:
 
@@ -200,7 +304,7 @@ PATCH /entregas/7/status HTTP/1.1" 200
 
 ![Producer publica entrega.status_atualizado](Sprint2/evidencias/rabbitmq/07-producer-publica-status-atualizado.png)
 
-## 6. Prova principal - Backlog sem consumidor
+## 7. Prova principal - Backlog sem consumidor
 
 Neste momento:
 
@@ -223,7 +327,7 @@ Essa é a principal evidência de desacoplamento. O producer consegue publicar
 mesmo sem um consumer disponível. O broker guarda as mensagens até que algum
 consumidor esteja pronto para processá-las.
 
-## 7. Terminal 4 - Consumer standalone
+## 8. Terminal 4 - Consumer standalone
 
 Somente depois de comprovar o backlog, abra um quarto PowerShell:
 
@@ -262,7 +366,7 @@ Total:   0
 
 ![RabbitMQ confirma o consumo da fila](Sprint2/evidencias/rabbitmq/10-rabbitmq-fila-apos-consumo.png)
 
-## 8. Histórico compartilhado no SQLite
+## 9. Histórico compartilhado no SQLite
 
 O consumer registra os eventos processados no SQLite. O backend expõe esse
 histórico pelo endpoint `GET /eventos`.
@@ -284,7 +388,7 @@ da mesma mensagem. Essa idempotência é importante porque a estratégia adotada
 é **at-least-once**: uma mensagem pode ser reenviada em caso de falha, mas não
 deve gerar efeitos duplicados.
 
-## 9. Como o RabbitMQ aumenta a confiabilidade
+## 10. Como o RabbitMQ aumenta a confiabilidade
 
 A implementação possui:
 
@@ -310,7 +414,7 @@ se recuperou automaticamente. O log registrou:
 
 Isso comprova que a nova tentativa de publicação foi aplicada com sucesso.
 
-## 10. Testes automatizados
+## 11. Testes automatizados
 
 Execute dentro de `Code/server/`:
 
@@ -344,7 +448,7 @@ O arquivo `tests/test_entregas.py` ainda contém apenas um placeholder. Portanto
 os endpoints REST foram validados manualmente nas evidências desta documentação.
 Os oito testes automatizados cobrem a camada MOM, não toda a API REST.
 
-## 11. Sequência curta para apresentar ao professor
+## 12. Sequência curta para apresentar ao professor
 
 1. Mostrar o backend Flask com `Consumidor in-process: OFF`.
 2. Mostrar as filas RabbitMQ inicialmente vazias.
@@ -362,4 +466,3 @@ O ponto central da apresentação é comparar estes dois momentos:
 | Antes de iniciar o consumer | Depois de iniciar o consumer |
 |---|---|
 | `Ready = 2`, pois o RabbitMQ preserva o backlog | `Ready = 0`, pois o worker processou e confirmou as mensagens |
-
