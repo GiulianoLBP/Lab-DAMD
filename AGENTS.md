@@ -29,7 +29,8 @@ the consumer directly; the only link between them is the broker.
   durable queue `fastdelivery.entregas` (bound with `#`), and a Dead-Letter
   exchange/queue (`fastdelivery.dlx` / `fastdelivery.dlq`).
 - Reliability: durable queues + persistent messages (`delivery_mode=2`), publisher
-  confirms (no silent loss), manual ack, and `nack(requeue=False)` → DLQ on handler failure.
+  confirms (no silent loss), one reconnect retry with the same idempotent event ID,
+  manual ack, and `nack(requeue=False)` → DLQ on handler failure.
 - Event handlers in `app/mom/consumer.py` must **not** swallow exceptions — letting
   them propagate is what routes poison messages to the DLQ.
 - Events are emitted from `EntregaUseCases` (create + status change) through

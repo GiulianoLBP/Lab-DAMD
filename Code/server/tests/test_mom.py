@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+import threading
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -94,6 +95,18 @@ class RabbitMQProcessingTests(unittest.TestCase):
         fresh_channel.confirm_delivery.assert_called_once_with()
         self.assertIs(self.bus._pub_conn, fresh_conn)
         self.assertIs(self.bus._pub_channel, fresh_channel)
+
+    def test_retries_publish_once_after_connection_failure(self):
+        self.bus._pub_lock = threading.Lock()
+        self.bus._publicar_confirmado = Mock(
+            side_effect=[ConnectionError('stale connection'), None]
+        )
+        self.bus._fechar_publish = Mock()
+
+        self.bus.publicar('entrega.criada', {'evento_id': 'evento-1'})
+
+        self.assertEqual(2, self.bus._publicar_confirmado.call_count)
+        self.bus._fechar_publish.assert_called_once_with()
 
 
 class ProcessedEventHistoryTests(unittest.TestCase):

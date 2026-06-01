@@ -86,7 +86,8 @@ O sistema implementa o padrão **Publish-Subscribe** para notificar eventos de e
 
 - **Produtor:** `EntregaUseCases` dispara eventos ao criar ou atualizar status.
 - **Consumidor:** `consumer_worker.py` roda de forma independente e processa o backlog da fila.
-- **Broker:** RabbitMQ via Docker, com fila durável, confirmação de publicação, ack manual e DLQ.
+- **Broker:** RabbitMQ via Docker, com fila durável, confirmação de publicação,
+  reconexão do producer, ack manual e DLQ.
 
 ### Tópicos Disponíveis
 - `entrega.criada`: Disparado ao criar uma nova entrega.

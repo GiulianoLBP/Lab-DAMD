@@ -248,31 +248,48 @@ class RabbitMQEventBus(EventBus):
         self._pub_conn = None
         self._pub_channel = None
 
+    def _publicar_confirmado(self, topico: str, payload_str: str) -> None:
+        self._garantir_conexao_publish()
+        self._pub_channel.basic_publish(
+            exchange=self.EXCHANGE,
+            routing_key=topico,
+            body=payload_str.encode('utf-8'),
+            properties=self._pika.BasicProperties(
+                delivery_mode=2,  # persistente (gravado em disco)
+                content_type='application/json',
+            ),
+            mandatory=True,  # com confirms, falha se não for roteável
+        )
+
     def publicar(self, topico: str, payload: dict) -> None:
         payload_str = json.dumps(payload, ensure_ascii=False)
         with self._pub_lock:
-            try:
-                self._garantir_conexao_publish()
-                self._pub_channel.basic_publish(
-                    exchange=self.EXCHANGE,
-                    routing_key=topico,
-                    body=payload_str.encode('utf-8'),
-                    properties=self._pika.BasicProperties(
-                        delivery_mode=2,  # persistente (gravado em disco)
-                        content_type='application/json',
-                    ),
-                    mandatory=True,  # com confirms, falha se não for roteável
-                )
-                logger.info('[RabbitMQ] Publicado em "%s": %s', topico, payload_str)
-            except Exception:
-                # Sem perda silenciosa: loga em ERROR, reseta a conexão e
-                # propaga — o broker NÃO confirmou a mensagem.
-                logger.exception(
-                    '[RabbitMQ] FALHA ao publicar em "%s" — mensagem NÃO '
-                    'confirmada pelo broker', topico
-                )
-                self._fechar_publish()
-                raise
+            for tentativa in range(2):
+                try:
+                    self._publicar_confirmado(topico, payload_str)
+                    logger.info(
+                        '[RabbitMQ] Publicado em "%s": %s', topico, payload_str
+                    )
+                    return
+                except Exception:
+                    self._fechar_publish()
+                    if tentativa == 0:
+                        # O broker pode encerrar conexões ociosas por heartbeat.
+                        # Repete o MESMO evento uma vez: eventual duplicata é
+                        # segura porque consumidores deduplicam por evento_id.
+                        logger.warning(
+                            '[RabbitMQ] Publicação falhou em "%s"; '
+                            'reconectando para uma nova tentativa', topico,
+                            exc_info=True,
+                        )
+                        continue
+                    # Sem perda silenciosa: após a reconexão, loga em ERROR e
+                    # propaga se o broker ainda não confirmar a mensagem.
+                    logger.exception(
+                        '[RabbitMQ] FALHA ao publicar em "%s" — mensagem NÃO '
+                        'confirmada pelo broker após reconexão', topico
+                    )
+                    raise
 
     # — assinatura / consumo —
 
