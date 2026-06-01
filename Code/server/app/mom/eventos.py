@@ -6,7 +6,7 @@ o payload necessário para que consumidores assíncronos processem.
 """
 
 
-# ─── Nomes dos tópicos (canais Pub/Sub) ────────────────────────────────
+# ─── Nomes dos tópicos (routing keys da exchange topic) ────────────────
 
 TOPICO_ENTREGA_CRIADA = 'entrega.criada'
 """Publicado quando uma nova solicitação de entrega é criada."""
@@ -58,7 +58,10 @@ EVENTOS = {
 def obter_payload(evento: str, dados: dict) -> dict:
     """Constrói o payload padronizado de um evento."""
     from datetime import datetime
+    from uuid import uuid4
+
     return {
+        'evento_id': str(uuid4()),
         'evento': evento,
         'dados': dados,
         'timestamp': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),

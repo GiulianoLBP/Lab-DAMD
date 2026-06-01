@@ -1,12 +1,21 @@
 services:
-  redis:
-    image: redis:7-alpine
-    container_name: fastdelivery-redis
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: fastdelivery-rabbitmq
     ports:
-      - "6379:6379"
+      - "5672:5672"     # AMQP (aplicação)
+      - "15672:15672"   # UI de gestão (http://localhost:15672, guest/guest)
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq   # persiste filas/mensagens duráveis
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
       retries: 5
+
+volumes:
+  rabbitmq_data:

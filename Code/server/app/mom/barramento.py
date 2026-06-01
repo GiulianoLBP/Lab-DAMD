@@ -1,24 +1,31 @@
 """
 Barramento de eventos (Event Bus).
 
-Abstração sobre o mecanismo de publicação/assinatura.
-Suporta Redis Pub/Sub (produção) e fallback em memória (desenvolvimento/testes).
+Abstração sobre o mecanismo de publicação/assinatura (MOM).
+Implementações disponíveis:
+  - RabbitMQEventBus: broker real (produção). Filas duráveis, confirmação de
+    publicação (publisher confirms), ack manual e Dead-Letter Queue.
+  - InMemoryEventBus: alternativa explícita APENAS para testes (vive em um
+    único processo).
 
 Uso:
     bus = criar_barramento()
     bus.publicar('meu.topico', {'chave': 'valor'})
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import os
 import threading
+import time
 from abc import ABC, abstractmethod
 from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
-# ─── Strategy: assinantes em memória ───────────────────────────────────
+# ─── Strategy: assinantes em memória (somente testes) ──────────────────
 
 _subscribers_memory: dict[str, list[Callable]] = {}
 _lock = threading.Lock()
@@ -61,16 +68,20 @@ class EventBus(ABC):
     @property
     @abstractmethod
     def nome(self) -> str:
-        """Nome do mecanismo subjacente (ex.: 'redis', 'in_memory')."""
+        """Nome do mecanismo subjacente (ex.: 'rabbitmq', 'in_memory')."""
 
 
-# ─── Implementação In-Memory ───────────────────────────────────────────
+# ─── Implementação In-Memory (somente testes) ──────────────────────────
 
 
 class InMemoryEventBus(EventBus):
     """
     Barramento baseado em listas de callbacks em memória.
-    Ideal para desenvolvimento sem dependências externas.
+
+    ATENÇÃO: serve APENAS para testes unitários. Vive na memória de um único
+    processo, não persiste mensagens e não cruza a fronteira de processos —
+    não há desacoplamento temporal nem espacial. Para qualquer execução real,
+    use o RabbitMQEventBus.
     """
 
     def __init__(self):
@@ -93,7 +104,7 @@ class InMemoryEventBus(EventBus):
 
     def iniciar_consumo(self) -> None:
         self._running = True
-        logger.info('[InMemory] Barramento pronto (modo memória)')
+        logger.info('[InMemory] Barramento pronto (modo memória — só testes)')
 
     def parar(self) -> None:
         self._running = False
@@ -104,115 +115,268 @@ class InMemoryEventBus(EventBus):
         return 'in_memory'
 
 
-# ─── Implementação Redis ───────────────────────────────────────────────
+# ─── Implementação RabbitMQ (broker real) ──────────────────────────────
 
 
-class RedisEventBus(EventBus):
+class RabbitMQEventBus(EventBus):
     """
-    Barramento real usando Redis Pub/Sub.
-    O consumidor roda em uma thread daemon escutando mensagens.
+    Barramento usando RabbitMQ (AMQP) via pika.
+
+    Topologia (declarada de forma idempotente por produtor e consumidor):
+      - exchange topic 'fastdelivery.events' (durável) — recebe os eventos.
+      - queue 'fastdelivery.entregas' (durável) — ligada à exchange com a
+        routing key '#' (captura TODOS os tópicos). É a fila que persiste o
+        backlog até o consumidor processá-lo.
+      - exchange direct 'fastdelivery.dlx' + queue 'fastdelivery.dlq' (durável):
+        Dead-Letter Queue. Mensagens cujo handler falha são rejeitadas
+        (basic_nack requeue=False) e roteadas para a DLQ — sem travar o consumo
+        nem perder o evento.
+
+    Garantias:
+      - Desacoplamento temporal: a fila durável guarda o evento mesmo se o
+        consumidor estiver offline. Ao voltar, ele processa o backlog.
+      - Desacoplamento espacial: produtor (Flask) e consumidor
+        (consumer_worker.py) são processos distintos; o único elo é o broker.
+      - Sem perda silenciosa: a publicação usa publisher confirms + mandatory;
+        se o broker não confirmar, a falha é logada e propagada (não engolida).
+      - Persistência: mensagens são delivery_mode=2 (gravadas em disco) e as
+        filas/exchanges são duráveis (sobrevivem ao restart do broker).
+      - Entrega at-least-once: ack manual só após o handler concluir.
     """
 
-    def __init__(self, host: str = 'localhost', port: int = 6379, db: int = 0):
-        import redis as redis_client
+    EXCHANGE = 'fastdelivery.events'
+    EXCHANGE_DLX = 'fastdelivery.dlx'
+    QUEUE = 'fastdelivery.entregas'
+    QUEUE_DLQ = 'fastdelivery.dlq'
+    ROUTING_KEY_DLQ = 'dead'
+    PREFETCH = 10
 
-        self._host = host
-        self._port = port
-        self._db = db
-        self._running = False
-        self._pubsub: Optional[redis_client.client.PubSub] = None
-        self._thread: Optional[threading.Thread] = None
-        self._client: Optional[redis_client.Redis] = None
+    def __init__(
+        self,
+        host: str = 'localhost',
+        port: int = 5672,
+        user: str = 'guest',
+        password: str = 'guest',
+        vhost: str = '/',
+        url: Optional[str] = None,
+    ):
+        import pika
+
+        self._pika = pika
+        if url:
+            self._params = pika.URLParameters(url)
+        else:
+            self._params = pika.ConnectionParameters(
+                host=host,
+                port=port,
+                virtual_host=vhost,
+                credentials=pika.PlainCredentials(user, password),
+                heartbeat=30,
+                blocked_connection_timeout=30,
+                connection_attempts=3,
+                retry_delay=2,
+            )
+
         self._callbacks: dict[str, list[Callable]] = {}
+        self._running = False
+        self._consume_thread: Optional[threading.Thread] = None
+        # Conexão dedicada à publicação (pika não é thread-safe por canal;
+        # o consumo usa uma conexão própria, na sua thread).
+        self._pub_conn = None
+        self._pub_channel = None
+        self._pub_lock = threading.Lock()
+
+    # — topologia —
+
+    def _declarar_topologia(self, channel) -> None:
+        """Declara exchanges, filas e bindings (idempotente)."""
+        # Dead-Letter: exchange direta + fila
+        channel.exchange_declare(
+            self.EXCHANGE_DLX, exchange_type='direct', durable=True
+        )
+        channel.queue_declare(self.QUEUE_DLQ, durable=True)
+        channel.queue_bind(
+            self.QUEUE_DLQ, self.EXCHANGE_DLX, routing_key=self.ROUTING_KEY_DLQ
+        )
+
+        # Exchange principal (topic) + fila durável com DLX configurada
+        channel.exchange_declare(
+            self.EXCHANGE, exchange_type='topic', durable=True
+        )
+        channel.queue_declare(
+            self.QUEUE,
+            durable=True,
+            arguments={
+                'x-dead-letter-exchange': self.EXCHANGE_DLX,
+                'x-dead-letter-routing-key': self.ROUTING_KEY_DLQ,
+            },
+        )
+        # '#' captura todos os tópicos: garante que o evento é enfileirado
+        # mesmo que o consumidor ainda não tenha registrado o handler.
+        channel.queue_bind(self.QUEUE, self.EXCHANGE, routing_key='#')
+
+    # — publicação —
+
+    def _garantir_conexao_publish(self) -> None:
+        if (
+            self._pub_conn is not None
+            and self._pub_conn.is_open
+            and self._pub_channel is not None
+            and self._pub_channel.is_open
+        ):
+            return
+        self._fechar_publish()
+        conn = None
+        try:
+            conn = self._pika.BlockingConnection(self._params)
+            channel = conn.channel()
+            self._declarar_topologia(channel)
+            channel.confirm_delivery()  # publisher confirms
+            self._pub_conn = conn
+            self._pub_channel = channel
+        except Exception:
+            if conn is not None and conn.is_open:
+                conn.close()
+            raise
+
+    def _fechar_publish(self) -> None:
+        try:
+            if self._pub_conn is not None and self._pub_conn.is_open:
+                self._pub_conn.close()
+        except Exception:
+            pass
+        self._pub_conn = None
+        self._pub_channel = None
 
     def publicar(self, topico: str, payload: dict) -> None:
-        if not self._client:
-            return  # não conectado
         payload_str = json.dumps(payload, ensure_ascii=False)
-        try:
-            self._client.publish(topico, payload_str)
-            logger.info('[Redis] Publicado em "%s": %s', topico, payload_str)
-        except Exception:
-            logger.exception('[Redis] Erro ao publicar em "%s"', topico)
+        with self._pub_lock:
+            try:
+                self._garantir_conexao_publish()
+                self._pub_channel.basic_publish(
+                    exchange=self.EXCHANGE,
+                    routing_key=topico,
+                    body=payload_str.encode('utf-8'),
+                    properties=self._pika.BasicProperties(
+                        delivery_mode=2,  # persistente (gravado em disco)
+                        content_type='application/json',
+                    ),
+                    mandatory=True,  # com confirms, falha se não for roteável
+                )
+                logger.info('[RabbitMQ] Publicado em "%s": %s', topico, payload_str)
+            except Exception:
+                # Sem perda silenciosa: loga em ERROR, reseta a conexão e
+                # propaga — o broker NÃO confirmou a mensagem.
+                logger.exception(
+                    '[RabbitMQ] FALHA ao publicar em "%s" — mensagem NÃO '
+                    'confirmada pelo broker', topico
+                )
+                self._fechar_publish()
+                raise
+
+    # — assinatura / consumo —
 
     def assinar(self, topico: str, callback: Callable[[str], None]) -> None:
         self._callbacks.setdefault(topico, []).append(callback)
-        if self._pubsub:
-            self._pubsub.subscribe(topico)
-        logger.info('[Redis] Assinante registrado para "%s"', topico)
+        logger.info('[RabbitMQ] Assinante registrado para "%s"', topico)
 
     def iniciar_consumo(self) -> None:
-        import redis as redis_client
-
+        # Garante a topologia já na subida (mesmo produtor puro), para que a
+        # fila durável exista e capture eventos antes de qualquer consumidor.
         try:
-            self._client = redis_client.Redis(
-                host=self._host,
-                port=self._port,
-                db=self._db,
-                decode_responses=True,
-                socket_connect_timeout=2,
-            )
-            self._client.ping()
+            with self._pub_lock:
+                self._garantir_conexao_publish()
         except Exception:
+            with self._pub_lock:
+                self._fechar_publish()
             logger.warning(
-                '[Redis] Não foi possível conectar em %s:%s — '
-                'o barramento não publicará eventos reais.',
-                self._host,
-                self._port,
+                '[RabbitMQ] Não foi possível conectar ao broker na inicialização '
+                '— a topologia/publicação será tentada novamente no 1º publish.'
             )
-            self._client = None
+
+        if not self._callbacks:
+            logger.info(
+                '[RabbitMQ] Cliente conectado apenas para publicação '
+                '(nenhum consumidor registrado neste processo).'
+            )
             return
 
-        self._pubsub = self._client.pubsub()
-        for topico in self._callbacks:
-            self._pubsub.subscribe(topico)
+        if self._consume_thread is not None and self._consume_thread.is_alive():
+            logger.info('[RabbitMQ] Consumidor já está em execução')
+            return
 
         self._running = True
-        self._thread = threading.Thread(target=self._loop, daemon=True)
-        self._thread.start()
-        logger.info('[Redis] Consumidor iniciado em thread daemon')
+        self._consume_thread = threading.Thread(target=self._loop, daemon=True)
+        self._consume_thread.start()
+        logger.info('[RabbitMQ] Consumidor iniciado em thread daemon')
 
     def _loop(self) -> None:
-        if not self._pubsub:
-            return
-        try:
-            for mensagem in self._pubsub.listen():
-                if not self._running:
-                    break
-                if mensagem['type'] == 'message':
-                    topico = mensagem['channel']
-                    payload_str = mensagem['data']
-                    logger.info(
-                        '[Redis] Recebido de "%s": %s', topico, payload_str
+        while self._running:
+            conn = None
+            try:
+                conn = self._pika.BlockingConnection(self._params)
+                channel = conn.channel()
+                self._declarar_topologia(channel)
+                channel.basic_qos(prefetch_count=self.PREFETCH)
+                logger.info(
+                    '[RabbitMQ] Consumindo da fila "%s" (Ctrl+C para sair)',
+                    self.QUEUE,
+                )
+                # inactivity_timeout permite checar self._running periodicamente.
+                for method, _props, body in channel.consume(
+                    self.QUEUE, inactivity_timeout=1
+                ):
+                    if not self._running:
+                        break
+                    if method is None:
+                        continue  # timeout de inatividade, sem mensagens
+                    self._processar(channel, method, body)
+                try:
+                    channel.cancel()
+                except Exception:
+                    pass
+            except Exception:
+                if self._running:
+                    logger.exception(
+                        '[RabbitMQ] Conexão de consumo caiu; reconectando em 3s'
                     )
-                    for cb in self._callbacks.get(topico, []):
-                        try:
-                            cb(payload_str)
-                        except Exception:
-                            logger.exception(
-                                'Erro em callback Redis de "%s"', topico
-                            )
+                    time.sleep(3)
+            finally:
+                try:
+                    if conn is not None and conn.is_open:
+                        conn.close()
+                except Exception:
+                    pass
+
+    def _processar(self, channel, method, body) -> None:
+        topico = method.routing_key
+        payload_str = body.decode('utf-8')
+        logger.info('[RabbitMQ] Recebido de "%s": %s', topico, payload_str)
+        try:
+            callbacks = self._callbacks.get(topico, [])
+            if not callbacks:
+                raise ValueError(f'Nenhum handler registrado para "{topico}"')
+            for cb in callbacks:
+                cb(payload_str)
+            channel.basic_ack(method.delivery_tag)
         except Exception:
-            logger.exception('[Redis] Erro no loop de consumo')
+            # Handler falhou: rejeita sem requeue → mensagem vai para a DLQ.
+            logger.exception(
+                '[RabbitMQ] Handler falhou em "%s" → enviando para a DLQ', topico
+            )
+            channel.basic_nack(method.delivery_tag, requeue=False)
 
     def parar(self) -> None:
         self._running = False
-        if self._pubsub:
-            try:
-                self._pubsub.unsubscribe()
-                self._pubsub.close()
-            except Exception:
-                pass
-        if self._client:
-            try:
-                self._client.close()
-            except Exception:
-                pass
-        logger.info('[Redis] Barramento parado')
+        if self._consume_thread is not None:
+            self._consume_thread.join(timeout=3)
+        with self._pub_lock:
+            self._fechar_publish()
+        logger.info('[RabbitMQ] Barramento parado')
 
     @property
     def nome(self) -> str:
-        return 'redis'
+        return 'rabbitmq'
 
 
 # ─── Fábrica ───────────────────────────────────────────────────────────
@@ -223,27 +387,34 @@ def criar_barramento() -> EventBus:
     Cria o barramento de eventos apropriado conforme configurado.
 
     Ordem de preferência:
-      1. Se REDIS_URL estiver definida → RedisEventBus
-      2. Se REDIS_HOST estiver definida → RedisEventBus
-      3. Caso contrário → InMemoryEventBus
+      1. Se EVENT_BUS=in_memory → InMemoryEventBus (somente para testes)
+      2. Caso contrário → RabbitMQEventBus (RABBITMQ_URL ou host/porta/cred)
+
+    Não há fallback implícito para memória: esquecer a configuração não pode
+    desativar silenciosamente o broker central.
     """
-    redis_url = os.environ.get('REDIS_URL')
-    redis_host = os.environ.get('REDIS_HOST')
+    event_bus = os.environ.get('EVENT_BUS', 'rabbitmq').strip().lower()
+    rabbit_url = os.environ.get('RABBITMQ_URL')
 
-    if redis_url:
-        # suporta redis://host:port
-        parts = redis_url.replace('redis://', '').split(':')
-        host = parts[0]
-        port = int(parts[1]) if len(parts) > 1 else 6379
-        bus = RedisEventBus(host=host, port=port)
-        logger.info('Barramento criado: Redis (via REDIS_URL)')
-        return bus
+    if event_bus == 'in_memory':
+        logger.info('Barramento criado: InMemory (modo de teste explícito)')
+        return InMemoryEventBus()
 
-    if redis_host:
-        port = int(os.environ.get('REDIS_PORT', '6379'))
-        bus = RedisEventBus(host=redis_host, port=port)
-        logger.info('Barramento criado: Redis (via REDIS_HOST)')
-        return bus
+    if event_bus != 'rabbitmq':
+        raise ValueError(
+            f'EVENT_BUS inválido: "{event_bus}". Use "rabbitmq" ou "in_memory".'
+        )
 
-    logger.info('Barramento criado: InMemory (fallback) — Redis não configurado')
-    return InMemoryEventBus()
+    if rabbit_url:
+        logger.info('Barramento criado: RabbitMQ (via RABBITMQ_URL)')
+        return RabbitMQEventBus(url=rabbit_url)
+
+    bus = RabbitMQEventBus(
+        host=os.environ.get('RABBITMQ_HOST', 'localhost'),
+        port=int(os.environ.get('RABBITMQ_PORT', '5672')),
+        user=os.environ.get('RABBITMQ_USER', 'guest'),
+        password=os.environ.get('RABBITMQ_PASS', 'guest'),
+        vhost=os.environ.get('RABBITMQ_VHOST', '/'),
+    )
+    logger.info('Barramento criado: RabbitMQ (via host/porta/credenciais)')
+    return bus

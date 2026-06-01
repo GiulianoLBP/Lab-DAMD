@@ -1,12 +1,20 @@
 """
-FastDelivery — Backend REST com MOM (Redis Pub/Sub ou InMemory)
+FastDelivery — Backend REST com MOM (RabbitMQ)
 
 Entry point do servidor Flask.
 Inicializa o banco, o barramento de eventos e o consumidor assíncrono.
 """
 
 import logging
-import threading
+import os
+
+# Carrega variáveis do arquivo .env (ex.: RABBITMQ_HOST) antes de qualquer leitura de os.environ.
+# O try/except garante que o servidor sobe mesmo se python-dotenv não estiver instalado.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 from flask import Flask, jsonify
 from app.database import init_db
@@ -60,9 +68,28 @@ init_use_cases(use_cases)
 
 # ─── Consumidor de eventos (thread em background) ─────────────────────
 
+# Por padrão o backend é um PRODUTOR PURO: ele publica eventos, e o consumo
+# fica no consumer_worker.py (processo separado, ciclo de vida independente).
+# RUN_CONSUMER_IN_PROCESS=true existe apenas como conveniência local.
+RUN_CONSUMER_IN_PROCESS = os.environ.get(
+    'RUN_CONSUMER_IN_PROCESS', 'false'
+).strip().lower() not in ('false', '0', 'no')
+
+
 def _iniciar_mom():
-    """Registra consumidores e inicia o loop de escuta."""
-    registrar_consumidores(barramento)
+    """Inicia o barramento; registra o consumidor in-process apenas se habilitado."""
+    if barramento.nome == 'in_memory' and not RUN_CONSUMER_IN_PROCESS:
+        raise RuntimeError(
+            'EVENT_BUS=in_memory exige RUN_CONSUMER_IN_PROCESS=true, pois o '
+            'barramento de teste não cruza processos.'
+        )
+    if RUN_CONSUMER_IN_PROCESS:
+        registrar_consumidores(barramento)
+    else:
+        logger.info(
+            'Consumidor in-process DESLIGADO (RUN_CONSUMER_IN_PROCESS=false) — '
+            'rode consumer_worker.py em um processo separado para consumir.'
+        )
     barramento.iniciar_consumo()
     logger.info('MOM inicializado (mecanismo: %s)', barramento.nome)
 
@@ -75,14 +102,10 @@ if __name__ == '__main__':
     init_db()
     logger.info('Banco SQLite inicializado')
 
-    # 2. MOM em background (antes do Flask, para não perder eventos)
-    if barramento.nome == 'redis':
-        # Redis: inicia síncrono (a thread de consumo é daemon)
-        _iniciar_mom()
-    else:
-        # InMemory: inicia em thread separada
-        mom_thread = threading.Thread(target=_iniciar_mom, daemon=True)
-        mom_thread.start()
+    # 2. MOM em background (antes do Flask, para não perder eventos).
+    # A thread de consumo do barramento já é daemon; iniciar_consumo() não
+    # bloqueia, então a inicialização é uniforme para qualquer mecanismo.
+    _iniciar_mom()
 
     logger.info('╔══════════════════════════════════════════════╗')
     logger.info('║       FastDelivery — Backend REST + MOM      ║')
@@ -90,6 +113,10 @@ if __name__ == '__main__':
     logger.info('║  Endpoint......: http://localhost:5000       ║')
     logger.info('║  Eventos MOM...: GET /eventos                ║')
     logger.info('╚══════════════════════════════════════════════╝')
+    logger.info(
+        'Consumidor in-process: %s',
+        'ON' if RUN_CONSUMER_IN_PROCESS else 'OFF (use consumer_worker.py)',
+    )
 
     app.run(debug=True, use_reloader=False)
     # use_reloader=False evita que threads MOM sejam duplicadas no reload

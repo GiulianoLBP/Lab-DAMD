@@ -24,7 +24,7 @@ app/
 
 - Python 3.8+ (recomendado: 3.12)
 - pip (gerenciador de pacotes)
-- Docker e Docker Compose (para rodar o MOM Redis)
+- Docker e Docker Compose (para rodar o RabbitMQ)
 
 > **Windows:** use sempre o comando `py` (Python Launcher) em vez de `python` para garantir que o interpretador correto seja usado.
 
@@ -36,8 +36,8 @@ app/
    cd Lab-DAMD\Code\server
    ```
 
-2. **Subir o Redis (MOM)**
-   A partir da Sprint 2, o sistema utiliza Redis para comunicação assíncrona.
+2. **Subir o RabbitMQ (MOM)**
+   O sistema utiliza RabbitMQ para comunicação assíncrona persistente.
    ```powershell
    docker compose up -d
    ```
@@ -63,29 +63,30 @@ app/
 
 4. **Executar o servidor** (dentro de `Code\server\`)
    ```powershell
-   # Modo padrão (com Redis rodando via Docker)
-   $env:REDIS_HOST = "localhost"
+   Copy-Item .env.example .env
    py main.py
 
-   # Modo Fallback (sem Redis — eventos em memória)
-   py main.py
+   # Em outro terminal: consumidor independente
+   py consumer_worker.py
    ```
 
    O servidor iniciará em `http://localhost:5000`
 
 ### Variáveis de Ambiente
 
-O sistema detecta automaticamente o mecanismo de mensageria:
-- `REDIS_HOST` ou `REDIS_URL`: ativa o **RedisEventBus** (Produção/Integração).
-- Caso omitidas: ativa o **InMemoryEventBus** (Desenvolvimento/Testes rápidos).
+- `EVENT_BUS=rabbitmq`: ativa o **RabbitMQEventBus** e é o padrão.
+- `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER` e `RABBITMQ_PASS`: configuram o broker.
+- `RABBITMQ_URL`: alternativa AMQP única para configurar o broker.
+- `RUN_CONSUMER_IN_PROCESS=false`: mantém backend e consumidor em processos independentes.
+- `EVENT_BUS=in_memory`: ativa o **InMemoryEventBus** explicitamente, apenas para testes; com o bootstrap Flask, exige `RUN_CONSUMER_IN_PROCESS=true`.
 
 ## 🛰️ Sprint 2 — Integração com MOM
 
 O sistema implementa o padrão **Publish-Subscribe** para notificar eventos de entrega de forma assíncrona.
 
 - **Produtor:** `EntregaUseCases` dispara eventos ao criar ou atualizar status.
-- **Consumidor:** Uma thread daemon (`consumer.py`) escuta os tópicos e processa a lógica de negócio secundária (como logs e histórico).
-- **Broker:** Redis (Pub/Sub) via Docker.
+- **Consumidor:** `consumer_worker.py` roda de forma independente e processa o backlog da fila.
+- **Broker:** RabbitMQ via Docker, com fila durável, confirmação de publicação, ack manual e DLQ.
 
 ### Tópicos Disponíveis
 - `entrega.criada`: Disparado ao criar uma nova entrega.
@@ -105,6 +106,11 @@ O sistema implementa o padrão **Publish-Subscribe** para notificar eventos de e
 | `cliente_id` | TEXT | NOT NULL | ID do cliente que solicitou |
 | `criado_em` | TEXT | NOT NULL | Timestamp de criação (ISO 8601) |
 | `atualizado_em` | TEXT | NOT NULL | Timestamp da última atualização (ISO 8601) |
+
+### Tabela: `eventos_processados`
+
+Histórico persistente do consumidor, compartilhado com `GET /eventos`. A chave
+`evento_id` torna o registro idempotente em caso de redelivery.
 
 #### Valores válidos para `status`
 
@@ -373,7 +379,7 @@ Lab-DAMD/
 │       │   ├── mom/                       # Camada de mensageria (EventBus)
 │       │   └── database.py                # Conexão SQLite
 │       ├── main.py                        # Entry point
-│       ├── docker-compose.yml             # Infra Redis
+│       ├── docker-compose.yml             # Infra RabbitMQ
 │       └── requirements.txt               # Dependências
 ├── docs/
 │   └── Sprint2/                           # Documentação da Integração MOM
@@ -390,7 +396,7 @@ Lab-DAMD/
 ## 🔧 Dependências
 
 - **Flask** — Framework web HTTP
-- **Redis** — Driver para integração com MOM
+- **pika** — Driver AMQP para integração com RabbitMQ
 - **SQLite3** — Banco de dados (já vem com Python)
 
 Veja `requirements.txt` para a versão exata.
@@ -401,7 +407,7 @@ Veja `requirements.txt` para a versão exata.
 - Timestamps utilizam formato ISO 8601 (UTC)
 - Todos os erros retornam JSON estruturado com campo `error`
 - A validação de status ocorre na camada de use cases
-- O modo Fallback (`InMemoryEventBus`) permite rodar o projeto sem Docker para fins de desenvolvimento rápido.
+- O `InMemoryEventBus` só é habilitado explicitamente com `EVENT_BUS=in_memory` em testes.
 
 ## 📋 Sprint 1 — Checklist
 
@@ -417,14 +423,14 @@ Veja `requirements.txt` para a versão exata.
 
 ## 📋 Sprint 2 — Checklist (MOM)
 
-- [x] Barramento abstrato e implementações (Redis + Memory)
-- [x] Docker Compose para Redis local
+- [x] Barramento abstrato e implementações (RabbitMQ + Memory para testes)
+- [x] Docker Compose para RabbitMQ local
 - [x] Produtor de eventos integrado aos Use Cases
-- [x] Consumidor em thread daemon com histórico
+- [x] Consumidor standalone com histórico persistente e idempotente
 - [x] Novo endpoint `GET /eventos`
 - [x] Diagrama C4 atualizado com MOM sólido
 - [x] Relatório de integração e catálogo de eventos
-- [x] Evidências de tráfego real no Redis (MONITOR)
+- [x] Fila durável, publisher confirms, ack manual e DLQ
 
 ## 📚 Próximas Fases
 

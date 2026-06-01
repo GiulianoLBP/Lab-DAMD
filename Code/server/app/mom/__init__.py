@@ -1,4 +1,4 @@
 # Módulo de Mensageria (MOM - Message Oriented Middleware)
 #
-# Implementa o padrão Pub/Sub para comunicação assíncrona entre componentes.
-# Suporta Redis (quando disponível) e fallback em memória via threading.
+# Comunicação assíncrona via broker. Implementação real: RabbitMQ (AMQP/pika),
+# com filas duráveis e Dead-Letter Queue. InMemory explícito apenas para testes.

@@ -1,5 +1,6 @@
 .claude
-.env.
+.env
+!.env.example
 /Contexto
 CLAUDE.md
 /venv
@@ -10,3 +11,4 @@ CLAUDE.md
 Implantação.md
 ProcessoImplantacao.md
 /docs/Sprint2/EXPLICACAO_HUMANA.md
+/specs
