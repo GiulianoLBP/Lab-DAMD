@@ -97,7 +97,10 @@ Fluxo demonstravel:
 
 ### 5. Arquitetura Flutter
 
-A organizacao segue camadas simples, alinhadas ao que foi pedido na Sprint 3:
+A organizacao segue camadas simples, alinhadas ao que foi pedido na Sprint 3 e
+inspiradas em Clean Architecture. A ideia principal e separar regras de negocio,
+acesso a dados, controle de estado e interface, evitando que a tela conheca
+detalhes de HTTP, JSON ou persistencia.
 
 ```text
 lib/
@@ -116,13 +119,220 @@ Responsabilidades:
 
 - `domain`: modelo `Entrega` e enum `StatusEntrega`.
 - `data`: servico REST `EntregaApiService`.
-- `application`: controllers com estado e polling.
-- `presentation`: telas e widgets reutilizaveis.
+- `application`: controllers com estado, polling e orquestracao dos fluxos.
+- `presentation`: telas e widgets reutilizaveis, sem regra de negocio pesada.
+- `core`: configuracoes e excecoes compartilhadas.
 
 A dependencia externa principal e `http`, sem Bloc, Riverpod, GetX ou geracao de
 codigo. Isso mantem a entrega simples, executavel e aderente ao prazo da Sprint 3.
 
-### 6. Preservacao das Sprints 1 e 2
+#### Leitura pela Clean Architecture
+
+| Camada | Papel no app | Arquivos principais |
+|---|---|---|
+| Presentation | Mostra telas, recebe toques e renderiza estados visuais. | `presentation/screens/*`, `presentation/widgets/*` |
+| Application | Guarda estado da tela, chama casos de uso simples e controla polling. | `application/entrega_controller.dart` |
+| Domain | Representa conceitos do negocio sem depender de Flutter ou HTTP. | `domain/entrega.dart`, `domain/status_entrega.dart` |
+| Data | Fala com servicos externos e converte JSON em objetos do dominio. | `data/entrega_api_service.dart` |
+| Core | Configuracao e erros compartilhados. | `core/config/api_config.dart`, `core/http/api_exception.dart` |
+
+O fluxo pratico fica assim:
+
+```text
+Tela Flutter -> Controller -> Service REST -> Backend Flask
+      ^             |              |
+      |             v              v
+      +------ estado/notificacao   JSON/HTTP
+```
+
+#### Diagrama de camadas
+
+O diagrama de camadas foi criado em `docs/Sprint3/arquitetura_app_cliente.md`.
+Para deixar o relatorio autocontido, o mesmo desenho arquitetural da Sprint 3
+tambem fica registrado abaixo:
+
+```mermaid
+flowchart TD
+    User["Cliente"]
+    Screens["Presentation\nscreens/widgets"]
+    Controller["Application\nEntregaController"]
+    Service["Data\nEntregaApiService"]
+    Domain["Domain\nEntrega, StatusEntrega"]
+    API["Backend Flask REST\nCode/server"]
+    DB["SQLite\nentregas.db"]
+    Rabbit["RabbitMQ\nfastdelivery.events"]
+    Worker["consumer_worker.py"]
+
+    User --> Screens
+    Screens --> Controller
+    Controller --> Service
+    Controller --> Domain
+    Service --> API
+    API --> DB
+    API --> Rabbit
+    Rabbit --> Worker
+    Worker --> DB
+```
+
+Essa separacao permite trocar detalhes de infraestrutura com menos impacto. Por
+exemplo, se no futuro o app usar autenticacao ou cache local, a mudanca deve
+entrar em `data`/`core`, sem obrigar as telas a entenderem como token, storage ou
+HTTP funcionam.
+
+### 6. Conceitos Flutter da aula aplicados
+
+A aula `aula07_flutter (2).html` apresentou conceitos de Flutter, Dart, widgets,
+estado, REST, seguranca e storage. A Sprint 3 aplica principalmente os conceitos
+de widgets, estado, ciclo de vida, null safety, Material Design, REST e testes.
+
+#### StatefulWidget e ciclo de vida
+
+As telas de lista, detalhes e formulario sao `StatefulWidget` porque precisam
+guardar estado temporario da UI: carregamento, dados recebidos, formulario em
+envio e polling ativo.
+
+Exemplo da lista:
+
+```dart
+class EntregaListScreen extends StatefulWidget {
+  const EntregaListScreen({super.key, required this.service});
+
+  final EntregaApiService service;
+
+  @override
+  State<EntregaListScreen> createState() => _EntregaListScreenState();
+}
+```
+
+O ciclo de vida aparece no `initState` e no `dispose`. No `initState`, a tela
+carrega os dados e inicia o polling. No `dispose`, libera o controller e cancela
+o timer, evitando requisicoes depois que a tela saiu da arvore de widgets.
+
+```dart
+@override
+void initState() {
+  super.initState();
+  _controller.carregar();
+  _controller.iniciarPolling();
+}
+
+@override
+void dispose() {
+  _controller.dispose();
+  super.dispose();
+}
+```
+
+#### Estado local com setState
+
+O formulario usa estado local para controlar se a entrega esta sendo enviada.
+Quando `_enviando` vira `true`, o botao e desabilitado e o texto muda para
+`Enviando...`.
+
+```dart
+if (!_formKey.currentState!.validate()) {
+  return;
+}
+setState(() => _enviando = true);
+```
+
+Esse e um uso adequado de `setState`: o estado pertence somente ao formulario.
+Ja a lista e os detalhes usam `ChangeNotifier`, porque precisam combinar dados
+vindos da API, polling, loading, erro e cancelamento.
+
+#### Tratamento de loading, erro e dados
+
+A lista trata os tres estados basicos recomendados na aula para telas que buscam
+dados de API:
+
+```dart
+if (_controller.carregando && entregas.isEmpty) {
+  return const LoadingView(mensagem: 'Carregando entregas...');
+}
+if (_controller.erro != null && entregas.isEmpty) {
+  return ErrorView(
+    mensagem: _controller.erro!,
+    onRetry: () => _controller.carregar(),
+  );
+}
+if (entregas.isEmpty) {
+  return const EmptyState(...);
+}
+
+return RefreshIndicator(
+  onRefresh: _controller.carregar,
+  child: ListView.builder(...),
+);
+```
+
+Assim o usuario nunca fica diante de uma tela sem contexto. O app informa quando
+esta carregando, quando ocorreu erro, quando nao ha entregas e quando ha dados.
+
+#### Null safety
+
+O modelo `Entrega` usa tipos opcionais quando o backend pode nao enviar um campo,
+por exemplo `criadoEm` e `atualizadoEm`.
+
+```dart
+final String? criadoEm;
+final String? atualizadoEm;
+
+StatusEntrega? get statusEnum => StatusEntrega.fromValor(status);
+```
+
+Nas telas, o codigo trata esses valores antes de exibir:
+
+```dart
+valor: entrega.criadoEm ?? '-',
+valor: entrega.atualizadoEm ?? '-',
+```
+
+Isso segue o conceito de null safety da aula: o codigo precisa reconhecer quando
+um valor pode ser nulo e decidir explicitamente o que fazer.
+
+#### REST com async/await
+
+O app usa o pacote `http`, como sugerido na aula para comecar, e encapsula as
+chamadas REST em `EntregaApiService`.
+
+```dart
+Future<List<Entrega>> listar({String? status}) async {
+  final resp = await _enviar(() => _client.get(uri));
+  _garantirSucesso(resp);
+  final dynamic corpo = _decodificar(resp.body);
+  return corpo
+      .whereType<Map<String, dynamic>>()
+      .map(Entrega.fromJson)
+      .toList(growable: false);
+}
+```
+
+O ponto importante e que a rede nao bloqueia a UI. A chamada retorna um `Future`,
+o controller aguarda com `await`, e a tela e redesenhada quando o estado muda.
+
+#### Material Design e widgets
+
+O app usa Material 3 no `MaterialApp`:
+
+```dart
+theme: ThemeData(
+  colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2563EB)),
+  useMaterial3: true,
+),
+```
+
+Nas telas, os componentes seguem o padrao Material: `Scaffold`, `AppBar`,
+`FloatingActionButton`, `FilledButton`, `TextFormField`, `SnackBar`, `Card`,
+`ListView` e `RefreshIndicator`.
+
+#### Conceitos da aula que ficaram fora do escopo
+
+Storage local (`shared_preferences`, `sqflite`, `flutter_secure_storage`) nao foi
+implementado na Sprint 3 porque o app nao salva dados no aparelho; a persistencia
+fica no backend. Autenticacao tambem ficou fora do escopo: o app usa
+`cliente-demo-001` ate uma sprint futura introduzir login e tokens.
+
+### 7. Preservacao das Sprints 1 e 2
 
 A Sprint 3 nao alterou o contrato REST para acomodar o mobile. O app consome a API
 existente.
