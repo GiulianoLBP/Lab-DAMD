@@ -1,4 +1,4 @@
-# Relatorio de Atendimento - Sprint 3
+﻿# Relatorio de Atendimento - Sprint 3
 
 Auditoria realizada em 2026-06-15 sobre o repositorio `Lab-DAMD`.
 
@@ -349,34 +349,119 @@ A mensageria da Sprint 2 tambem foi preservada:
 ## Evidencias visuais
 
 As imagens abaixo estao na raiz do repositorio e mostram a aplicacao rodando em
-um telefone Android simulado no Android Studio.
+um telefone Android simulado no Android Studio. Elas nao sao apenas prints de
+tela: cada uma registra uma parte do comportamento exigido pela Sprint 3.
 
 ### Tela inicial - lista vazia
 
-Mostra a tela principal do app, com estado vazio, botao de atualizar e acao para
+Este print mostra o estado inicial da tela de listagem quando o cliente ainda
+nao possui entregas. Ele comprova que a lista trata o estado vazio de forma
+clara, sem deixar a tela em branco, e oferece a acao principal da Sprint 3:
 criar uma nova entrega.
 
 ![Tela inicial do app FastDelivery no emulador Android](../../main%20page.png)
 
 ### Tela de nova entrega
 
-Mostra a tela de criacao com os tres campos exigidos pelo fluxo da Sprint 3.
+Este print mostra a tela de criacao com os campos `descricao`, `origem` e
+`destino`. Ele evidencia a terceira tela obrigatoria da Sprint 3 e mostra que o
+usuario cliente consegue iniciar uma solicitacao pelo app Flutter.
 
 ![Tela de criacao de entrega no emulador Android](../../pagina%20de%20criar%20entrega.png)
 
 ### Formulario preenchido
 
-Mostra o formulario preenchido antes do envio para o backend.
+Este print mostra o formulario preenchido antes do envio. Ele ajuda a demonstrar
+o fluxo real de entrada de dados do cliente antes do `POST /entregas`, sem usar
+dados mockados na interface.
 
 ![Formulario de entrega preenchido no emulador Android](../../entrega%20escrevivel.png)
 
 ### Entrega criada pelo frontend
 
-Mostra a entrega criada aparecendo na lista do app. A imagem tambem registra logs
-do backend com `POST /entregas` retornando `201` e `GET /entregas` retornando
-`200`, evidenciando a integracao REST real.
+Este print mostra a entrega criada aparecendo na lista do app. A imagem tambem
+registra logs do backend com `POST /entregas` retornando `201` e `GET /entregas`
+retornando `200`, evidenciando que a tela Flutter esta integrada ao backend REST
+real e nao apenas renderizando dados fixos.
 
 ![Entrega criada pelo frontend e exibida no app Android](../../entrega%20criada%20pelo%20frontend.png)
+
+### Detalhe da entrega pendente
+
+Este print cobre a tela de detalhes, que e um requisito explicito da Sprint 3.
+Ele mostra os campos completos da entrega, a linha de progresso do status e o
+botao `Cancelar entrega`, que aparece somente quando o status esta `pendente`.
+Isso comprova que a tela de detalhes nao e apenas uma duplicacao da lista: ela
+expande os dados e oferece uma acao contextual do cliente.
+
+![Detalhe da entrega pendente no emulador Android](../../detalhe%20da%20entrega%20pendente.png)
+
+### Entrega aceita na lista
+
+Este print mostra a mesma entrega depois da mudanca de status para `aceito`.
+Ele evidencia a atualizacao assincrona por polling: o status alterado no servidor
+passa a aparecer automaticamente na lista do app, sem o cliente precisar recriar
+a entrega ou navegar por outro fluxo manual.
+
+![Entrega aceita exibida na lista do app](../../entrega%20aceita.png)
+
+### Detalhe da entrega aceita
+
+Este print mostra a tela de detalhes apos a entrega ser aceita. A etapa `Aceito`
+aparece marcada na linha de progresso e o botao de cancelamento deixa de ficar
+disponivel, exibindo a mensagem de que apenas entregas pendentes podem ser
+canceladas pelo cliente. Isso valida duas regras de negocio no app: acompanhar a
+mudanca de status e restringir a acao de cancelamento ao estado correto.
+
+![Detalhe da entrega aceita no emulador Android](../../detalhe%20da%20entrega%20aceita.png)
+
+### Botao de cancelar entrega
+
+Este print mostra uma entrega pendente criada para validar o fluxo de
+cancelamento pelo cliente. O botao `Cancelar entrega` aparece porque o status
+ainda permite essa acao. Esse comportamento esta alinhado ao escopo da Sprint 3:
+o cliente pode cancelar uma entrega pendente, mas nao pode aceitar, iniciar
+transito ou concluir uma entrega.
+
+![Botao de cancelar entrega pendente](../../bot%C3%A3o%20cancelar%20entrega.png)
+
+### Confirmacao de cancelamento
+
+Este print mostra o dialogo de confirmacao antes de cancelar. Ele evidencia um
+cuidado de usabilidade: a acao altera o estado da entrega no backend, entao o app
+pede confirmacao antes de enviar o `PATCH /entregas/<id>/status` com
+`cancelado`.
+
+![Popup de confirmacao de cancelamento](../../popup%20cancelar%20entrega.png)
+
+### Entrega cancelada
+
+Este print mostra o resultado final do cancelamento: badge `Cancelado`, mensagem
+visual de entrega cancelada, snackbar de confirmacao e ausencia do botao de
+cancelar. Ele comprova o fluxo completo de acao do cliente: tela de detalhes,
+confirmacao, chamada REST e atualizacao da UI com o novo estado.
+
+![Entrega cancelada no app Android](../../entrega%20cancelada.png)
+
+### Backend publicando status aceito
+
+Este print mostra o terminal do backend/RabbitMQ publicando o evento
+`entrega.status_atualizado` quando a entrega `#9` muda de `pendente` para
+`aceito`. Ele reforca que a atualizacao vista no app nasce de uma alteracao real
+no backend e tambem preserva a comunicacao assincrona da Sprint 2 por meio da
+publicacao do evento no broker.
+
+![Backend publicando evento de entrega aceita](../../entrega%20aceita%20backend.png)
+
+### Backend publicando cancelamento
+
+Este print mostra o backend publicando outro evento `entrega.status_atualizado`,
+agora para a entrega `#10`, com transicao de `pendente` para `cancelado`. Ele
+complementa a evidencia anterior porque demonstra que a acao feita pelo app
+cliente tambem gera evento de dominio e passa pelo mesmo fluxo assincrono do
+sistema.
+
+![Backend publicando evento de entrega cancelada](../../entrega%20cancelada%20backend%20terminal.png)
 
 ## Evidencias de testes
 
