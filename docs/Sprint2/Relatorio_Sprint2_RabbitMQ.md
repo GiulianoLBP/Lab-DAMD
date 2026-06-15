@@ -203,7 +203,7 @@ $body = @{
 
 $entrega = Invoke-RestMethod `
   -Method Post `
-  -Uri "http://localhost:5000/entregas" `
+  -Uri "http://localhost:5055/entregas" `
   -ContentType "application/json" `
   -Body $body
 
@@ -211,7 +211,7 @@ $entrega
 
 Invoke-RestMethod `
   -Method Patch `
-  -Uri "http://localhost:5000/entregas/$($entrega.id)/status" `
+  -Uri "http://localhost:5055/entregas/$($entrega.id)/status" `
   -ContentType "application/json" `
   -Body '{"status":"aceito"}'
 ```
@@ -239,7 +239,7 @@ O worker deve processar o backlog e registrar logs para `entrega.criada` e `entr
 No terminal de cliente:
 
 ```powershell
-Invoke-RestMethod -Uri "http://localhost:5000/eventos" |
+Invoke-RestMethod -Uri "http://localhost:5055/eventos" |
   ConvertTo-Json -Depth 10
 ```
 
@@ -297,4 +297,3 @@ Na UI, abra **Queues and Streams** > `fastdelivery.dlq`. A fila deve receber a m
 ## Observação sobre evidências antigas
 
 Os arquivos históricos em `docs/Sprint2/evidencias/` foram produzidos antes da migração e ainda descrevem Redis. Eles não devem ser usados como evidência atual da solução RabbitMQ. Use os prints novos sugeridos nesta documentação.
-

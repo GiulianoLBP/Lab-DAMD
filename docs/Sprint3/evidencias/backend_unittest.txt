@@ -1,0 +1,62 @@
+test_api01_criar_entrega_valida (test_entregas.EntregaApiTests.test_api01_criar_entrega_valida) ... ok
+test_api02_criar_campo_em_branco (test_entregas.EntregaApiTests.test_api02_criar_campo_em_branco) ... ok
+test_api02_criar_sem_body (test_entregas.EntregaApiTests.test_api02_criar_sem_body) ... ok
+test_api02_criar_sem_campo_obrigatorio (test_entregas.EntregaApiTests.test_api02_criar_sem_campo_obrigatorio) ... ok
+test_api03_listar_retorna_array (test_entregas.EntregaApiTests.test_api03_listar_retorna_array) ... ok
+test_api04_listar_filtra_por_status (test_entregas.EntregaApiTests.test_api04_listar_filtra_por_status) ... ok
+test_api05_listar_status_invalido (test_entregas.EntregaApiTests.test_api05_listar_status_invalido) ... ok
+test_api06_obter_existente (test_entregas.EntregaApiTests.test_api06_obter_existente) ... ok
+test_api07_obter_inexistente (test_entregas.EntregaApiTests.test_api07_obter_inexistente) ... ok
+test_api08_atualizar_status_valido_publica_evento (test_entregas.EntregaApiTests.test_api08_atualizar_status_valido_publica_evento) ... ok
+test_api09_atualizar_status_invalido (test_entregas.EntregaApiTests.test_api09_atualizar_status_invalido) ... ok
+test_api10_listar_eventos (test_entregas.EntregaApiTests.test_api10_listar_eventos) ... ok
+test_atualizar_status_inexistente (test_entregas.EntregaApiTests.test_atualizar_status_inexistente) ... ok
+test_atualizar_status_sem_campo (test_entregas.EntregaApiTests.test_atualizar_status_sem_campo) ... ok
+test_cliente_cancela_entrega_pendente (test_entregas.EntregaApiTests.test_cliente_cancela_entrega_pendente) ... ok
+test_post_ignora_status_enviado_pelo_cliente (test_entregas.EntregaApiTests.test_post_ignora_status_enviado_pelo_cliente) ... ok
+test_in_memory_requires_explicit_configuration (test_mom.FactoryTests.test_in_memory_requires_explicit_configuration) ... ok
+test_rabbitmq_is_the_default_bus (test_mom.FactoryTests.test_rabbitmq_is_the_default_bus) ... ok
+test_history_is_persistent_and_idempotent (test_mom.ProcessedEventHistoryTests.test_history_is_persistent_and_idempotent) ... ok
+test_acknowledges_message_after_successful_handler (test_mom.RabbitMQProcessingTests.test_acknowledges_message_after_successful_handler) ... ok
+test_replaces_connection_when_publish_channel_is_closed (test_mom.RabbitMQProcessingTests.test_replaces_connection_when_publish_channel_is_closed) ... ok
+test_retries_publish_once_after_connection_failure (test_mom.RabbitMQProcessingTests.test_retries_publish_once_after_connection_failure) ... [RabbitMQ] Publicação falhou em "entrega.criada"; reconectando para uma nova tentativa
+Traceback (most recent call last):
+  File "C:\Users\gpercope\Documents\GitHub\Lab-DAMD\Code\server\app\mom\barramento.py", line 269, in publicar
+    self._publicar_confirmado(topico, payload_str)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\gpercope\AppData\Local\Python\pythoncore-3.14-64\Lib\unittest\mock.py", line 1175, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\gpercope\AppData\Local\Python\pythoncore-3.14-64\Lib\unittest\mock.py", line 1179, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\gpercope\AppData\Local\Python\pythoncore-3.14-64\Lib\unittest\mock.py", line 1238, in _execute_mock_call
+    raise result
+ConnectionError: stale connection
+ok
+test_sends_message_to_dlq_when_handler_fails (test_mom.RabbitMQProcessingTests.test_sends_message_to_dlq_when_handler_fails) ... [RabbitMQ] Handler falhou em "entrega.criada" \u2192 enviando para a DLQ
+Traceback (most recent call last):
+  File "C:\Users\gpercope\Documents\GitHub\Lab-DAMD\Code\server\app\mom\barramento.py", line 377, in _processar
+    cb(payload_str)
+    ~~^^^^^^^^^^^^^
+  File "C:\Users\gpercope\AppData\Local\Python\pythoncore-3.14-64\Lib\unittest\mock.py", line 1175, in __call__
+    return self._mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\gpercope\AppData\Local\Python\pythoncore-3.14-64\Lib\unittest\mock.py", line 1179, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "C:\Users\gpercope\AppData\Local\Python\pythoncore-3.14-64\Lib\unittest\mock.py", line 1234, in _execute_mock_call
+    raise effect
+ValueError
+ok
+test_sends_unknown_topic_to_dlq (test_mom.RabbitMQProcessingTests.test_sends_unknown_topic_to_dlq) ... [RabbitMQ] Handler falhou em "entrega.desconhecida" \u2192 enviando para a DLQ
+Traceback (most recent call last):
+  File "C:\Users\gpercope\Documents\GitHub\Lab-DAMD\Code\server\app\mom\barramento.py", line 375, in _processar
+    raise ValueError(f'Nenhum handler registrado para "{topico}"')
+ValueError: Nenhum handler registrado para "entrega.desconhecida"
+ok
+
+----------------------------------------------------------------------
+Ran 24 tests in 1.120s
+
+OK

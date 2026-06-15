@@ -1,0 +1,3 @@
+﻿Analyzing fastdelivery_cliente...                               
+No issues found! (ran in 14.6s)
+

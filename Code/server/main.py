@@ -75,6 +75,13 @@ RUN_CONSUMER_IN_PROCESS = os.environ.get(
     'RUN_CONSUMER_IN_PROCESS', 'false'
 ).strip().lower() not in ('false', '0', 'no')
 
+API_HOST = os.environ.get('FASTDELIVERY_API_HOST', '0.0.0.0')
+API_PORT = int(os.environ.get('FASTDELIVERY_API_PORT', '5055'))
+API_PUBLIC_URL = os.environ.get(
+    'FASTDELIVERY_API_PUBLIC_URL',
+    f'http://localhost:{API_PORT}',
+)
+
 
 def _iniciar_mom():
     """Inicia o barramento; registra o consumidor in-process apenas se habilitado."""
@@ -110,7 +117,7 @@ if __name__ == '__main__':
     logger.info('╔══════════════════════════════════════════════╗')
     logger.info('║       FastDelivery — Backend REST + MOM      ║')
     logger.info('║  Mecanismo MOM.: %-26s ║', barramento.nome)
-    logger.info('║  Endpoint......: http://localhost:5000       ║')
+    logger.info('║  Endpoint......: %-28s ║', API_PUBLIC_URL)
     logger.info('║  Eventos MOM...: GET /eventos                ║')
     logger.info('╚══════════════════════════════════════════════╝')
     logger.info(
@@ -118,5 +125,5 @@ if __name__ == '__main__':
         'ON' if RUN_CONSUMER_IN_PROCESS else 'OFF (use consumer_worker.py)',
     )
 
-    app.run(debug=True, use_reloader=False)
+    app.run(host=API_HOST, port=API_PORT, debug=True, use_reloader=False)
     # use_reloader=False evita que threads MOM sejam duplicadas no reload

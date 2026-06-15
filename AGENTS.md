@@ -13,7 +13,9 @@ This repository contains a Flask REST API for FastDelivery. Main backend code li
 - `Code/server/consumer_worker.py`: standalone consumer process (no Flask), proves producer/consumer lifecycle independence.
 - `Code/server/docker-compose.yml`: local RabbitMQ broker (AMQP 5672, management UI 15672).
 - `Code/server/tests/`: automated tests for the MOM layer and API.
+- `Code/mobile/fastdelivery_cliente/`: Flutter client app (Sprint 3) — list/detail/create + cancel of entregas over REST, with 5s polling. Layered: `core/`, `features/entregas/{domain,data,application,presentation}`.
 - `docs/`: PDFs, architecture notes, Draw.io files, and endpoint screenshots.
+- `docs/Sprint3/`: Sprint 3 specs, Flutter client architecture, tests, acceptance criteria, and future evidence.
 - `specs/changes.md`: messaging analysis and the Redis→RabbitMQ migration record.
 - `postman_collection.json`: manual API test collection.
 
@@ -38,6 +40,21 @@ the consumer directly; the only link between them is the broker.
 - Config via env (`.env`): `EVENT_BUS`, `RABBITMQ_HOST/PORT/USER/PASS` (or `RABBITMQ_URL`) and
   `RUN_CONSUMER_IN_PROCESS` (`false` = backend is producer-only, run `consumer_worker.py` separately).
 
+## Sprint 3 / Flutter Client
+
+Sprint 3 is scoped to the **client** Flutter app only. Follow the specs in
+`docs/Sprint3/` before implementation. The recommended app location is
+`Code/mobile/fastdelivery_cliente/`.
+
+- Keep the client app integrated through the existing REST endpoints from Sprint 1.
+- Use simple polling (default 5 seconds) for client-side asynchronous status refresh;
+  do not connect the mobile client directly to RabbitMQ in Sprint 3.
+- Preserve all Sprint 2 MOM behavior: RabbitMQ remains the real broker, the Flask
+  backend remains producer-only by default, and `consumer_worker.py` remains the
+  independent consumer.
+- Use a fixed demo `cliente_id` until authentication is introduced in a future scope.
+- Do not implement prestador/entregador workflows in the client app; those belong to Sprint 4.
+
 ## Build, Test, and Development Commands
 
 Run commands from `Code/server/` unless noted otherwise.
@@ -55,10 +72,29 @@ py consumer_worker.py         # consumer, in a separate terminal (when RUN_CONSU
 `pip install -r requirements.txt` installs Flask and `pika`. `docker-compose up -d`
 starts RabbitMQ (AMQP on 5672, management UI on http://localhost:15672, guest/guest).
 `py main.py` initializes `entregas.db` automatically and starts the API at
-`http://localhost:5000`. RabbitMQ is the default bus; `EVENT_BUS=in_memory`
+`http://localhost:5055`. RabbitMQ is the default bus; `EVENT_BUS=in_memory`
 enables the in-memory implementation explicitly for tests only.
 
 There is no build step for this backend. For manual verification, import `postman_collection.json` into Postman or run curl requests from the README.
+
+For the Flutter client, run from `Code/mobile/fastdelivery_cliente/`:
+
+```powershell
+flutter pub get
+flutter analyze
+flutter test
+dart format .
+flutter run --dart-define=FASTDELIVERY_API_URL=http://10.0.2.2:5055   # Android emulator -> backend local
+```
+
+The only runtime dependency is `http`. The API base URL is injected via
+`--dart-define=FASTDELIVERY_API_URL` (default `http://localhost:5055`); do not
+hardcode it or change the backend just for URLs.
+
+This Windows environment reserves TCP ports `4940-5039`, which includes Flask's
+traditional port `5000`. Keep the FastDelivery API default on
+`FASTDELIVERY_API_PORT=5055`; Android emulator clients should use
+`http://10.0.2.2:5055`.
 
 ## Coding Style & Naming Conventions
 

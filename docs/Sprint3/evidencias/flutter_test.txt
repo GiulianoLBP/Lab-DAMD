@@ -1,0 +1,18 @@
+﻿00:00 +0: loading C:/Users/gpercope/Documents/GitHub/Lab-DAMD/Code/mobile/fastdelivery_cliente/test/features/entregas/empty_state_test.dart
+00:00 +0: C:/Users/gpercope/Documents/GitHub/Lab-DAMD/Code/mobile/fastdelivery_cliente/test/features/entregas/empty_state_test.dart: FL08 estado vazio mostra título e descrição
+00:00 +1: C:/Users/gpercope/Documents/GitHub/Lab-DAMD/Code/mobile/fastdelivery_cliente/test/features/entregas/empty_state_test.dart: FL08 estado vazio mostra título e descrição
+00:00 +2: C:/Users/gpercope/Documents/GitHub/Lab-DAMD/Code/mobile/fastdelivery_cliente/test/features/entregas/empty_state_test.dart: FL08 estado vazio mostra título e descrição
+00:00 +3: C:/Users/gpercope/Documents/GitHub/Lab-DAMD/Code/mobile/fastdelivery_cliente/test/features/entregas/empty_state_test.dart: FL08 estado vazio mostra título e descrição
+00:00 +4: C:/Users/gpercope/Documents/GitHub/Lab-DAMD/Code/mobile/fastdelivery_cliente/test/features/entregas/empty_state_test.dart: FL08 estado vazio mostra título e descrição
+00:00 +5: C:/Users/gpercope/Documents/GitHub/Lab-DAMD/Code/mobile/fastdelivery_cliente/test/features/entregas/empty_state_test.dart: FL08 estado vazio mostra título e descrição
+00:01 +6: C:/Users/gpercope/Documents/GitHub/Lab-DAMD/Code/mobile/fastdelivery_cliente/test/features/entregas/entrega_form_screen_test.dart: FL05 formulário vazio mostra validação e não envia
+00:01 +7: C:/Users/gpercope/Documents/GitHub/Lab-DAMD/Code/mobile/fastdelivery_cliente/test/features/entregas/entrega_form_screen_test.dart: FL05 formulário vazio mostra validação e não envia
+00:01 +8: C:/Users/gpercope/Documents/GitHub/Lab-DAMD/Code/mobile/fastdelivery_cliente/test/features/entregas/entrega_form_screen_test.dart: FL05 formulário vazio mostra validação e não envia
+00:01 +9: C:/Users/gpercope/Documents/GitHub/Lab-DAMD/Code/mobile/fastdelivery_cliente/test/features/entregas/entrega_form_screen_test.dart: FL05 formulário vazio mostra validação e não envia
+00:01 +10: C:/Users/gpercope/Documents/GitHub/Lab-DAMD/Code/mobile/fastdelivery_cliente/test/features/entregas/entrega_form_screen_test.dart: FL05 formulário vazio mostra validação e não envia
+00:02 +11: C:/Users/gpercope/Documents/GitHub/Lab-DAMD/Code/mobile/fastdelivery_cliente/test/features/entregas/entrega_form_screen_test.dart: FL05 formulário vazio mostra validação e não envia
+00:02 +12: C:/Users/gpercope/Documents/GitHub/Lab-DAMD/Code/mobile/fastdelivery_cliente/test/features/entregas/status_badge_test.dart: FL07 badge mostra o rótulo correto de cada status
+00:03 +13: C:/Users/gpercope/Documents/GitHub/Lab-DAMD/Code/mobile/fastdelivery_cliente/test/features/entregas/entrega_form_screen_test.dart: FL06 formulário válido chama criação e mostra carregando
+00:03 +14: C:/Users/gpercope/Documents/GitHub/Lab-DAMD/Code/mobile/fastdelivery_cliente/test/features/entregas/entrega_form_screen_test.dart: FL06 formulário válido chama criação e mostra carregando
+00:03 +15: All tests passed!
+

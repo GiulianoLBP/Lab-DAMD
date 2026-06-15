@@ -20,12 +20,12 @@
           "raw": "{\n  \"descricao\": \"Buscar encomenda\",\n  \"origem\": \"Rua A, 100\",\n  \"destino\": \"Rua B, 200\",\n  \"cliente_id\": \"cliente-uuid-123\"\n}"
         },
         "url": {
-          "raw": "http://localhost:5000/entregas",
+          "raw": "http://localhost:5055/entregas",
           "protocol": "http",
           "host": [
             "localhost"
           ],
-          "port": "5000",
+          "port": "5055",
           "path": [
             "entregas"
           ]
@@ -40,12 +40,12 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "http://localhost:5000/entregas",
+          "raw": "http://localhost:5055/entregas",
           "protocol": "http",
           "host": [
             "localhost"
           ],
-          "port": "5000",
+          "port": "5055",
           "path": [
             "entregas"
           ],
@@ -67,12 +67,12 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "http://localhost:5000/entregas/1",
+          "raw": "http://localhost:5055/entregas/1",
           "protocol": "http",
           "host": [
             "localhost"
           ],
-          "port": "5000",
+          "port": "5055",
           "path": [
             "entregas",
             "1"
@@ -97,12 +97,12 @@
           "raw": "{\n  \"status\": \"aceito\"\n}"
         },
         "url": {
-          "raw": "http://localhost:5000/entregas/1/status",
+          "raw": "http://localhost:5055/entregas/1/status",
           "protocol": "http",
           "host": [
             "localhost"
           ],
-          "port": "5000",
+          "port": "5055",
           "path": [
             "entregas",
             "1",
@@ -119,12 +119,12 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "http://localhost:5000/eventos",
+          "raw": "http://localhost:5055/eventos",
           "protocol": "http",
           "host": [
             "localhost"
           ],
-          "port": "5000",
+          "port": "5055",
           "path": [
             "eventos"
           ]
@@ -138,12 +138,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "http://localhost:5000/eventos",
+              "raw": "http://localhost:5055/eventos",
               "protocol": "http",
               "host": [
                 "localhost"
               ],
-              "port": "5000",
+              "port": "5055",
               "path": [
                 "eventos"
               ]

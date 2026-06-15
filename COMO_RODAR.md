@@ -59,7 +59,7 @@ py main.py
 Ao iniciar corretamente, a API ficara disponivel em:
 
 ```text
-http://localhost:5000
+http://localhost:5055
 ```
 
 O banco SQLite `entregas.db` sera criado automaticamente na primeira execucao.
@@ -69,13 +69,13 @@ O banco SQLite `entregas.db` sera criado automaticamente na primeira execucao.
 Com a aplicacao rodando, abra outro terminal e execute:
 
 ```powershell
-curl http://localhost:5000/entregas
+curl http://localhost:5055/entregas
 ```
 
 Para criar uma entrega:
 
 ```powershell
-curl -X POST http://localhost:5000/entregas `
+curl -X POST http://localhost:5055/entregas `
   -H "Content-Type: application/json" `
   -d '{"descricao":"Entrega teste","origem":"Rua A","destino":"Rua B","cliente_id":"cliente-1"}'
 ```

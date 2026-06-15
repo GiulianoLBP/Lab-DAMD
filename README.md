@@ -70,7 +70,7 @@ app/
    py consumer_worker.py
    ```
 
-   O servidor iniciará em `http://localhost:5000`
+   O servidor iniciará em `http://localhost:5055`
 
 ### Variáveis de Ambiente
 
@@ -142,7 +142,7 @@ CREATE TABLE entregas (
 
 **Request:**
 ```bash
-curl -X POST http://localhost:5000/entregas \
+curl -X POST http://localhost:5055/entregas \
   -H "Content-Type: application/json" \
   -d '{
     "descricao": "Buscar encomenda",
@@ -175,10 +175,10 @@ curl -X POST http://localhost:5000/entregas \
 **Request:**
 ```bash
 # Listar todas
-curl http://localhost:5000/entregas
+curl http://localhost:5055/entregas
 
 # Filtrar por status
-curl http://localhost:5000/entregas?status=pendente
+curl http://localhost:5055/entregas?status=pendente
 ```
 
 **Response (200 OK):**
@@ -205,7 +205,7 @@ curl http://localhost:5000/entregas?status=pendente
 
 **Request:**
 ```bash
-curl http://localhost:5000/entregas/1
+curl http://localhost:5055/entregas/1
 ```
 
 **Response (200 OK):**
@@ -237,7 +237,7 @@ curl http://localhost:5000/entregas/1
 
 **Request:**
 ```bash
-curl -X PATCH http://localhost:5000/entregas/1/status \
+curl -X PATCH http://localhost:5055/entregas/1/status \
   -H "Content-Type: application/json" \
   -d '{"status": "aceito"}'
 ```
@@ -279,10 +279,10 @@ curl -X PATCH http://localhost:5000/entregas/1/status \
 **Request:**
 ```bash
 # Obter últimos eventos (padrão 10)
-curl http://localhost:5000/eventos
+curl http://localhost:5055/eventos
 
 # Filtrar quantidade
-curl http://localhost:5000/eventos?ultimos=5
+curl http://localhost:5055/eventos?ultimos=5
 ```
 
 **Response (200 OK):**
@@ -308,7 +308,7 @@ Importe o arquivo `postman_collection.json` na sua ferramenta de testes (Postman
 
 ### Evidências de execução
 
-Todos os endpoints foram testados com o servidor rodando localmente em `http://localhost:5000`.
+Todos os endpoints foram testados com o servidor rodando localmente em `http://localhost:5055`.
 
 #### POST /entregas — Criar nova entrega
 
@@ -346,18 +346,18 @@ Veja exemplos nos endpoints acima ou use:
 
 ```bash
 # Criar entrega
-curl -X POST http://localhost:5000/entregas \
+curl -X POST http://localhost:5055/entregas \
   -H "Content-Type: application/json" \
   -d '{"descricao":"Test","origem":"A","destino":"B","cliente_id":"c1"}'
 
 # Listar entregas
-curl http://localhost:5000/entregas
+curl http://localhost:5055/entregas
 
 # Obter entrega específica
-curl http://localhost:5000/entregas/1
+curl http://localhost:5055/entregas/1
 
 # Atualizar status
-curl -X PATCH http://localhost:5000/entregas/1/status \
+curl -X PATCH http://localhost:5055/entregas/1/status \
   -H "Content-Type: application/json" \
   -d '{"status":"aceito"}'
 ```
@@ -383,7 +383,8 @@ Lab-DAMD/
 │       ├── docker-compose.yml             # Infra RabbitMQ
 │       └── requirements.txt               # Dependências
 ├── docs/
-│   └── Sprint2/                           # Documentação da Integração MOM
+│   ├── Sprint2/                           # Documentação da Integração MOM
+│   └── Sprint3/                           # Specs do App Flutter Cliente
 ├── postman_collection.json                # Coleção de testes (v2)
 └── README.md                              # Este arquivo
 ```
@@ -391,8 +392,15 @@ Lab-DAMD/
 ## 📑 Documentação da Sprint 2
 
 - [Guia de Eventos e Tópicos](docs/Sprint2/eventos.md)
-- [Relatório Técnico de Integração](docs/Sprint2/Relatorio_Sprint2.md)
+- [Relatório Técnico de Integração](docs/Sprint2/Relatorio_Sprint2_RabbitMQ.md)
 - [Evidências de Execução MOM](docs/Sprint2/evidencias/)
+
+## 📑 Specs da Sprint 3
+
+- [Visão geral e decisões](docs/Sprint3/README.md)
+- [Spec do App Cliente](docs/Sprint3/spec_app_cliente.md)
+- [Arquitetura do App Cliente](docs/Sprint3/arquitetura_app_cliente.md)
+- [Plano de Testes e Critérios de Aceite](docs/Sprint3/plano_testes_e_aceite.md)
 
 ## 🔧 Dependências
 
@@ -435,7 +443,7 @@ Veja `requirements.txt` para a versão exata.
 
 ## 📚 Próximas Fases
 
-**Sprint 3:** App Flutter — Cliente
+**Sprint 3:** App Flutter — Cliente (specs em `docs/Sprint3/`)
 **Sprint 4:** App Flutter — Entregador + Relatório Final
 
 ---

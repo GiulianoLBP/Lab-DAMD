@@ -451,11 +451,11 @@ py main.py""")
 } | ConvertTo-Json
 
 $entrega = Invoke-RestMethod -Method Post `
-  -Uri "http://localhost:5000/entregas" `
+  -Uri "http://localhost:5055/entregas" `
   -ContentType "application/json" -Body $body
 
 Invoke-RestMethod -Method Patch `
-  -Uri "http://localhost:5000/entregas/$($entrega.id)/status" `
+  -Uri "http://localhost:5055/entregas/$($entrega.id)/status" `
   -ContentType "application/json" -Body '{"status":"aceito"}'""")
     add_note(doc, "Print E3 - Com o worker desligado, abra Queues and Streams > fastdelivery.entregas e capture Ready aumentando em 2. Este é o print principal da assincronicidade.")
 
@@ -469,7 +469,7 @@ py consumer_worker.py""")
     add_note(doc, "Print E4 - Capture os logs do worker para entrega.criada e entrega.status_atualizado. Print E5 - Atualize a UI e capture Ready = 0.")
 
     add_heading(doc, "5. Consultar o histórico", 2)
-    add_code(doc, r"""Invoke-RestMethod -Uri "http://localhost:5000/eventos" |
+    add_code(doc, r"""Invoke-RestMethod -Uri "http://localhost:5055/eventos" |
   ConvertTo-Json -Depth 10""")
     add_note(doc, "Print E6 - Capture o JSON contendo os dois eventos, seus evento_id, tipos, mensagens e payloads.")
 

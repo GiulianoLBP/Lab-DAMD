@@ -254,7 +254,7 @@ $body = @{
 
 $entrega = Invoke-RestMethod `
   -Method Post `
-  -Uri "http://localhost:5000/entregas" `
+  -Uri "http://localhost:5055/entregas" `
   -ContentType "application/json" `
   -Body $body
 
@@ -280,7 +280,7 @@ Ainda com o consumer desligado, altere o status:
 ```powershell
 Invoke-RestMethod `
   -Method Patch `
-  -Uri "http://localhost:5000/entregas/$($entrega.id)/status" `
+  -Uri "http://localhost:5055/entregas/$($entrega.id)/status" `
   -ContentType "application/json" `
   -Body '{"status":"aceito"}' |
   ConvertTo-Json
@@ -375,7 +375,7 @@ No Terminal 3:
 
 ```powershell
 Invoke-RestMethod `
-  -Uri "http://localhost:5000/eventos" |
+  -Uri "http://localhost:5055/eventos" |
   ConvertTo-Json -Depth 10
 ```
 
