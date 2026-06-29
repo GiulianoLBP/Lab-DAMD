@@ -17,6 +17,7 @@ except ImportError:
     pass
 
 from flask import Flask, jsonify
+from flask_cors import CORS
 from app.database import init_db
 from app.repositories.entrega_repository import EntregaRepository
 from app.use_cases.entrega_use_cases import EntregaUseCases
@@ -40,6 +41,7 @@ logger = logging.getLogger('FastDelivery')
 # ─── Aplicação Flask ──────────────────────────────────────────────────
 
 app = Flask(__name__)
+CORS(app)
 app.register_blueprint(entrega_bp)
 
 # ─── Notificação em tempo real (ponte RabbitMQ → WebSocket) ───────────
