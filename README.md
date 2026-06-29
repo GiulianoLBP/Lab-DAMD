@@ -1,510 +1,321 @@
-# FastDelivery — Backend REST API
+# FastDelivery
 
-Plataforma de delivery generalista desenvolvida em Flask (Python) com banco de dados SQLite.
+Plataforma de delivery generalista desenvolvida como **Projeto Integrador de LDAMD**
+(Laboratório de Desenvolvimento de Aplicações Móveis e Distribuídas — PUC Minas).
 
-## 📋 Visão Geral
+O sistema conecta **clientes** (que solicitam entregas) e **prestadores/entregadores**
+(que aceitam e executam), com **backend REST em Flask**, **comunicação assíncrona via
+MOM (RabbitMQ)** e **dois aplicativos Flutter** independentes (cliente e prestador).
 
-FastDelivery é um sistema que conecta **clientes** (que solicitam entregas) e **entregadores** (que aceitam e executam as entregas). Esta é a implementação do backend REST da Sprint 1, com 4 endpoints principais e arquitetura em camadas (Clean Architecture).
+## 🎥 Vídeo de apresentação
 
-## 🏗️ Arquitetura
+**▶️ https://youtu.be/nA9eXRoObc4** — demonstração do fluxo completo de ponta a ponta
+(cliente cria → prestador é notificado em tempo real → aceita → cliente é atualizado).
 
-O código segue **Clean Architecture** com separação em camadas:
+---
+
+## 📋 Visão geral
+
+| Componente | Tecnologia | Pasta |
+|---|---|---|
+| Backend REST + MOM | Flask (Python), SQLite, RabbitMQ (pika), flask-sock | `Code/server/` |
+| App do cliente | Flutter/Dart (`http`, `ChangeNotifier`) | `Code/mobile/fastdelivery_cliente/` |
+| App do prestador | Flutter/Dart (`http`, `web_socket_channel`) | `Code/mobile/fastdelivery_prestador/` |
+| Broker (MOM) | RabbitMQ (Docker) | `Code/server/docker-compose.yml` |
 
 ```
-app/
-├── domain/           # Entidades e enums de domínio
-├── repositories/     # Acesso aos dados (SQLite)
-├── use_cases/        # Lógica de negócio
-└── controllers/      # Rotas Flask (thin layer)
-```
-
-## 🚀 Setup e Instalação
-
-### Pré-requisitos
-
-- Python 3.8+ (recomendado: 3.12)
-- pip (gerenciador de pacotes)
-- Docker e Docker Compose (para rodar o RabbitMQ)
-
-> **Windows:** use sempre o comando `py` (Python Launcher) em vez de `python` para garantir que o interpretador correto seja usado.
-
-### Passos
-
-1. **Clonar o repositório e entrar na pasta do servidor**
-   ```powershell
-   git clone <url-do-repositorio>
-   cd Lab-DAMD\Code\server
-   ```
-
-2. **Subir o RabbitMQ (MOM)**
-   O sistema utiliza RabbitMQ para comunicação assíncrona persistente.
-   ```powershell
-   docker compose up -d
-   ```
-
-3. **Criar ambiente virtual** (opcional, mas recomendado)
-   ```powershell
-   # Windows (PowerShell)
-   py -m venv venv
-   .\venv\Scripts\Activate.ps1
-
-   # macOS/Linux
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
-
-   > **Nota PowerShell:** se aparecer erro de política de execução, rode primeiro:
-   > `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`
-
-3. **Instalar dependências** (dentro de `Code\server\`)
-   ```powershell
-   pip install -r requirements.txt
-   ```
-
-4. **Executar o servidor** (dentro de `Code\server\`)
-   ```powershell
-   Copy-Item .env.example .env
-   py main.py
-
-   # Em outro terminal: consumidor independente
-   py consumer_worker.py
-   ```
-
-   O servidor iniciará em `http://localhost:5055`
-
-### Variáveis de Ambiente
-
-- `EVENT_BUS=rabbitmq`: ativa o **RabbitMQEventBus** e é o padrão.
-- `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER` e `RABBITMQ_PASS`: configuram o broker.
-- `RABBITMQ_URL`: alternativa AMQP única para configurar o broker.
-- `RUN_CONSUMER_IN_PROCESS=false`: mantém backend e consumidor em processos independentes.
-- `EVENT_BUS=in_memory`: ativa o **InMemoryEventBus** explicitamente, apenas para testes; com o bootstrap Flask, exige `RUN_CONSUMER_IN_PROCESS=true`.
-
-## 🛰️ Sprint 2 — Integração com MOM
-
-O sistema implementa o padrão **Publish-Subscribe** para notificar eventos de entrega de forma assíncrona.
-
-- **Produtor:** `EntregaUseCases` dispara eventos ao criar ou atualizar status.
-- **Consumidor:** `consumer_worker.py` roda de forma independente e processa o backlog da fila.
-- **Broker:** RabbitMQ via Docker, com fila durável, confirmação de publicação,
-  reconexão do producer, ack manual e DLQ.
-
-### Tópicos Disponíveis
-- `entrega.criada`: Disparado ao criar uma nova entrega.
-- `entrega.status_atualizado`: Disparado ao alterar o status de uma entrega.
-
-## 📊 Schema do Banco de Dados
-
-### Tabela: `entregas`
-
-| Campo | Tipo | Restrições | Descrição |
-|-------|------|-----------|-----------|
-| `id` | INTEGER | PRIMARY KEY, AUTOINCREMENT | Identificador único da entrega |
-| `descricao` | TEXT | NOT NULL | Descrição do item a entregar |
-| `origem` | TEXT | NOT NULL | Endereço de origem |
-| `destino` | TEXT | NOT NULL | Endereço de destino |
-| `status` | TEXT | NOT NULL, DEFAULT 'pendente' | Status atual (ver valores abaixo) |
-| `cliente_id` | TEXT | NOT NULL | ID do cliente que solicitou |
-| `criado_em` | TEXT | NOT NULL | Timestamp de criação (ISO 8601) |
-| `atualizado_em` | TEXT | NOT NULL | Timestamp da última atualização (ISO 8601) |
-
-### Tabela: `eventos_processados`
-
-Histórico persistente do consumidor, compartilhado com `GET /eventos`. A chave
-`evento_id` torna o registro idempotente em caso de redelivery.
-
-#### Valores válidos para `status`
-
-- `pendente` — Entrega aguardando aceite de um entregador
-- `aceito` — Entregador aceitou a entrega
-- `em_transito` — Entrega a caminho do destino
-- `concluido` — Entrega finalizada com sucesso
-- `cancelado` — Entrega foi cancelada
-
-```sql
-CREATE TABLE entregas (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    descricao   TEXT    NOT NULL,
-    origem      TEXT    NOT NULL,
-    destino     TEXT    NOT NULL,
-    status      TEXT    NOT NULL DEFAULT 'pendente',
-    cliente_id  TEXT    NOT NULL,
-    criado_em   TEXT    NOT NULL DEFAULT (datetime('now')),
-    atualizado_em TEXT  NOT NULL DEFAULT (datetime('now'))
-);
-```
-
-## 🔌 Endpoints da API
-
-### 1. POST /entregas
-
-**Criar nova solicitação de entrega**
-
-**Request:**
-```bash
-curl -X POST http://localhost:5055/entregas \
-  -H "Content-Type: application/json" \
-  -d '{
-    "descricao": "Buscar encomenda",
-    "origem": "Rua A, 100",
-    "destino": "Rua B, 200",
-    "cliente_id": "cliente-uuid-123"
-  }'
-```
-
-**Response (201 Created):**
-```json
-{
-  "id": 1,
-  "descricao": "Buscar encomenda",
-  "origem": "Rua A, 100",
-  "destino": "Rua B, 200",
-  "status": "pendente",
-  "cliente_id": "cliente-uuid-123",
-  "criado_em": "2026-05-11T10:00:00",
-  "atualizado_em": "2026-05-11T10:00:00"
-}
+                 REST (HTTP)                 REST (HTTP) + WebSocket
+   ┌───────────────┐   ┌───────────────────────────┐   ┌────────────────┐
+   │  App Cliente  │──►│        Backend Flask        │◄──│ App Prestador  │
+   │  (Flutter)    │   │  REST + Producer + Ponte WS │   │  (Flutter)     │
+   │ polling 5s    │◄──│                             │──►│ tempo real     │
+   └───────────────┘   └─────────────┬───────────────┘   └────────────────┘
+                                      │ publica/consome (AMQP)
+                                ┌─────▼──────┐
+                                │  RabbitMQ  │  exchange topic: fastdelivery.events
+                                │   (MOM)    │  filas: fastdelivery.entregas (worker),
+                                └─────┬──────┘         fastdelivery.realtime (ponte WS), DLQ
+                                      │ consome (histórico)
+                              ┌───────▼─────────┐
+                              │ consumer_worker │  grava histórico → GET /eventos
+                              └─────────────────┘
 ```
 
 ---
 
-### 2. GET /entregas
+## 🧭 Decisões de arquitetura
 
-**Listar todas as entregas**
-
-**Request:**
-```bash
-# Listar todas
-curl http://localhost:5055/entregas
-
-# Filtrar por status
-curl http://localhost:5055/entregas?status=pendente
-```
-
-**Response (200 OK):**
-```json
-[
-  {
-    "id": 1,
-    "descricao": "Buscar encomenda",
-    "origem": "Rua A, 100",
-    "destino": "Rua B, 200",
-    "status": "pendente",
-    "cliente_id": "cliente-uuid-123",
-    "criado_em": "2026-05-11T10:00:00",
-    "atualizado_em": "2026-05-11T10:00:00"
-  }
-]
-```
-
----
-
-### 3. GET /entregas/`<id>`
-
-**Consultar detalhes de uma entrega específica**
-
-**Request:**
-```bash
-curl http://localhost:5055/entregas/1
-```
-
-**Response (200 OK):**
-```json
-{
-  "id": 1,
-  "descricao": "Buscar encomenda",
-  "origem": "Rua A, 100",
-  "destino": "Rua B, 200",
-  "status": "pendente",
-  "cliente_id": "cliente-uuid-123",
-  "criado_em": "2026-05-11T10:00:00",
-  "atualizado_em": "2026-05-11T10:00:00"
-}
-```
-
-**Response (404 Not Found):**
-```json
-{
-  "error": "Entrega não encontrada"
-}
-```
+1. **Clean Architecture** no backend e nos dois apps — camadas `domain` (entidades/regra
+   pura), `data`/`repositories` (acesso externo), `use_cases`/`application` (lógica) e
+   `controllers`/`presentation` (entrada/UI). Controllers/telas ficam finos.
+2. **Arquitetura orientada a eventos (EDA) com MOM (RabbitMQ)** — o backend publica
+   eventos de domínio (`entrega.criada`, `entrega.status_atualizado`) num **exchange topic**
+   (`fastdelivery.events`). Produtor e consumidor são **desacoplados** (ligados só pelo
+   broker). Garantias: fila **durável**, **publisher confirms**, **ack manual**,
+   **Dead-Letter Queue** e **idempotência** por `evento_id`.
+3. **Cliente por polling, prestador em tempo real** — o app do cliente reflete mudanças
+   por **polling REST (5s)** e nunca fala direto com o broker (simples e robusto). O app do
+   prestador precisa de **notificação assíncrona real**: o backend sobe uma **ponte
+   WebSocket** (`flask-sock`, rota `/ws/eventos`) que consome o RabbitMQ e empurra os
+   eventos ao app, sem polling.
+4. **Fila dedicada para a ponte** — a ponte consome `fastdelivery.realtime` (fila própria,
+   ligada ao mesmo exchange topic), e **não** a `fastdelivery.entregas` do
+   `consumer_worker.py`. Assim não há *competing consumers*: cada consumidor recebe sua
+   cópia de cada evento via fan-out do exchange, sem interferir no histórico.
+5. **Broker privado** — nenhum app fala AMQP diretamente; o RabbitMQ fica atrás do backend.
+6. **"Recusar" reaproveita o status `cancelado`** — o contrato REST não tem um status
+   "recusado"; a recusa do prestador é `PATCH status=cancelado`, evitando inventar um novo
+   status (sem mudança em backend/schema).
+7. **Dois apps independentes com core copiado** — cada app é executável por conta própria
+   (`applicationId` distinto), compartilhando o mesmo *contrato* REST/MOM; os pequenos
+   arquivos de domínio/dados são copiados, mantendo os apps desacoplados.
+8. **Tema central (`AppTheme`)** — identidade visual única (paleta, tipografia, tokens de
+   espaçamento/raio, estilos de componentes) compartilhada pelos dois apps.
+9. **CORS habilitado** (`flask-cors`) para permitir os apps Flutter Web conversarem com o
+   backend durante o desenvolvimento.
 
 ---
 
-### 4. PATCH /entregas/`<id>`/status
+## 🗂️ O que foi feito em cada Sprint
 
-**Atualizar status de uma entrega**
+### Sprint 1 — Backend REST (Clean Architecture)
+API REST em Flask + SQLite, em camadas, com validação e tratamento de erros padronizado
+(`{"error": "..."}`).
 
-**Request:**
-```bash
-curl -X PATCH http://localhost:5055/entregas/1/status \
-  -H "Content-Type: application/json" \
-  -d '{"status": "aceito"}'
-```
+- [x] Clean Architecture (`domain`, `repositories`, `use_cases`, `controllers`)
+- [x] SQLite com schema e inicialização automática
+- [x] `Entrega` + enum `StatusEntrega`
+- [x] Endpoints `POST /entregas`, `GET /entregas`, `GET /entregas/<id>`, `PATCH /entregas/<id>/status`
+- [x] Validação e erros JSON; coleção Postman; README
 
-**Response (200 OK):**
-```json
-{
-  "id": 1,
-  "descricao": "Buscar encomenda",
-  "origem": "Rua A, 100",
-  "destino": "Rua B, 200",
-  "status": "aceito",
-  "cliente_id": "cliente-uuid-123",
-  "criado_em": "2026-05-11T10:00:00",
-  "atualizado_em": "2026-05-11T10:00:50"
-}
-```
+### Sprint 2 — Integração com MOM (RabbitMQ)
+Padrão **Publish-Subscribe** para eventos de entrega de forma assíncrona e confiável.
 
-**Response (400 Bad Request):**
-```json
-{
-  "error": "Status inválido"
-}
-```
+- [x] Barramento abstrato (`EventBus`) com `RabbitMQEventBus` (real) e `InMemoryEventBus` (testes)
+- [x] Docker Compose do RabbitMQ; exchange topic + fila durável + DLQ
+- [x] Produtor integrado aos use cases (`entrega.criada`, `entrega.status_atualizado`)
+- [x] **Consumidor standalone** (`consumer_worker.py`) com histórico persistente e idempotente
+- [x] Endpoint `GET /eventos`; publisher confirms, ack manual, reconexão; diagrama C4 e relatório
 
-**Response (404 Not Found):**
-```json
-{
-  "error": "Entrega não encontrada"
-}
-```
+### Sprint 3 — App Flutter do Cliente
+App do cliente em Clean Architecture (`http` + `ChangeNotifier`), atualização por **polling
+REST de 5s** (sem acoplar o cliente ao broker).
 
----
+- [x] Telas: lista, detalhe (com timeline de status) e formulário de nova entrega
+- [x] Criar, listar, detalhar e **cancelar** (único status escrito pelo cliente)
+- [x] Estados de carregando/erro/vazio reutilizáveis; testes de widget e de serviço
+- [x] URL da API via `--dart-define` (sem hardcode)
 
-### 5. GET /eventos
+### Sprint 4 — App Flutter do Prestador + tempo real + entrega final
+App do prestador (separado) e **notificação assíncrona real** via MOM, fechando o fluxo
+ponta a ponta. Refino visual dos dois apps.
 
-**Listar eventos processados pelo consumidor MOM**
-
-**Request:**
-```bash
-# Obter últimos eventos (padrão 10)
-curl http://localhost:5055/eventos
-
-# Filtrar quantidade
-curl http://localhost:5055/eventos?ultimos=5
-```
-
-**Response (200 OK):**
-```json
-[
-  {
-    "tipo": "entrega.criada",
-    "entrega_id": 1,
-    "mensagem": "Nova entrega criada: Buscar encomenda",
-    "processado_em": "2026-05-22T10:00:00",
-    "payload": { "id": 1, "status": "pendente" }
-  }
-]
-```
+- [x] App do prestador com **3 telas**: pendentes, detalhe (Aceitar/Recusar) e em andamento
+- [x] **Ponte RabbitMQ → WebSocket** (`/ws/eventos`, fila `fastdelivery.realtime`): prestador
+      notificado em tempo real, sem polling
+- [x] Fluxo ponta a ponta: cliente cria → prestador notificado → aceita → cliente atualizado
+- [x] Tema central aplicado aos dois apps (coerência visual)
+- [x] [Relatório técnico](docs/Sprint4/Relatorio_Sprint4_FastDelivery.pdf), [roteiro do vídeo](docs/Sprint4/roteiro.md) e [vídeo](https://youtu.be/nA9eXRoObc4)
 
 ---
 
-## 🧪 Testando a API
-
-### Com Postman/Insomnia
-
-Importe o arquivo `postman_collection.json` na sua ferramenta de testes (Postman, Insomnia, etc.). A coleção contém todos os 4 endpoints pré-configurados com exemplos de request e documentação.
-
-### Evidências de execução
-
-Todos os endpoints foram testados com o servidor rodando localmente em `http://localhost:5055`.
-
-#### POST /entregas — Criar nova entrega
-
-![POST /entregas](docs/Image/POST-entregas.png)
-
-Cria uma nova solicitação com status inicial `pendente`. Retorna `201 Created` com o objeto completo.
-
----
-
-#### GET /entregas — Listar todas as entregas
-
-![GET /entregas](docs/Image/GET-entregas.png)
-
-Lista todas as entregas cadastradas. Suporta filtro opcional `?status=<valor>`. Retorna `200 OK` com array de objetos.
-
----
-
-#### GET /entregas/\<id\> — Consultar entrega por ID
-
-![GET /entregas/id](docs/Image/GET-entregas-id.png)
-
-Retorna os detalhes de uma entrega específica. Retorna `200 OK` com o objeto ou `404 Not Found` se o id não existir.
-
----
-
-#### PATCH /entregas/\<id\>/status — Atualizar status
-
-![PATCH /entregas/id/status](docs/Image/PATCH-entregas-id-stauts.png)
-
-Atualiza o status de uma entrega existente. Retorna `200 OK` com o objeto atualizado, `400 Bad Request` para status inválido ou `404 Not Found` se o id não existir.
-
-### Com curl
-
-Veja exemplos nos endpoints acima ou use:
-
-```bash
-# Criar entrega
-curl -X POST http://localhost:5055/entregas \
-  -H "Content-Type: application/json" \
-  -d '{"descricao":"Test","origem":"A","destino":"B","cliente_id":"c1"}'
-
-# Listar entregas
-curl http://localhost:5055/entregas
-
-# Obter entrega específica
-curl http://localhost:5055/entregas/1
-
-# Atualizar status
-curl -X PATCH http://localhost:5055/entregas/1/status \
-  -H "Content-Type: application/json" \
-  -d '{"status":"aceito"}'
-```
-
-## 📁 Estrutura do Projeto
+## 🧱 Estrutura do repositório
 
 ```
 Lab-DAMD/
 ├── Code/
-│   └── server/
-│       ├── app/
-│       │   ├── domain/
-│       │   │   └── models.py              # Entidades (Entrega, StatusEntrega)
-│       │   ├── repositories/
-│       │   │   └── entrega_repository.py  # Acesso a SQLite
-│       │   ├── use_cases/
-│       │   │   └── entrega_use_cases.py   # Lógica de negócio
-│       │   ├── controllers/
-│       │   │   └── entrega_controller.py  # Rotas Flask
-│       │   ├── mom/                       # Camada de mensageria (EventBus)
-│       │   └── database.py                # Conexão SQLite
-│       ├── main.py                        # Entry point
-│       ├── docker-compose.yml             # Infra RabbitMQ
-│       └── requirements.txt               # Dependências
+│   ├── server/                              # Backend Flask + MOM
+│   │   ├── app/
+│   │   │   ├── domain/        models.py     # Entrega, StatusEntrega
+│   │   │   ├── repositories/                # SQLite (entregas + eventos_processados)
+│   │   │   ├── use_cases/                   # Regra de negócio + publicação de eventos
+│   │   │   ├── controllers/                 # Rotas REST (thin)
+│   │   │   ├── mom/                         # EventBus (RabbitMQ/InMemory), producer, consumer, eventos
+│   │   │   └── realtime/                    # Ponte RabbitMQ→WebSocket (hub, bridge, ws_routes)
+│   │   ├── main.py                          # Entry point (REST + producer + ponte WS)
+│   │   ├── consumer_worker.py               # Consumidor standalone (histórico)
+│   │   ├── docker-compose.yml               # RabbitMQ
+│   │   ├── requirements.txt                 # Flask, pika, flask-sock, flask-cors, python-dotenv
+│   │   └── tests/                           # Testes (API, MOM, realtime)
+│   └── mobile/
+│       ├── fastdelivery_cliente/            # App Flutter do cliente (Sprint 3)
+│       └── fastdelivery_prestador/          # App Flutter do prestador (Sprint 4)
 ├── docs/
-│   ├── Sprint2/                           # Documentação da Integração MOM
-│   └── Sprint3/                           # Specs do App Flutter Cliente
-├── postman_collection.json                # Coleção de testes (v2)
-└── README.md                              # Este arquivo
+│   ├── Sprint2/                             # MOM: eventos, relatório, evidências
+│   ├── Sprint3/                             # Specs e arquitetura do app cliente
+│   └── Sprint4/                             # Plano, relatório, roteiro do vídeo e evidências
+├── postman_collection.json                  # Coleção de testes da API
+└── README.md                                # Este arquivo
 ```
-
-## 📑 Documentação da Sprint 2
-
-- [Guia de Eventos e Tópicos](docs/Sprint2/eventos.md)
-- [Relatório Técnico de Integração](docs/Sprint2/Relatorio_Sprint2_RabbitMQ.md)
-- [Evidências de Execução MOM](docs/Sprint2/evidencias/)
-
-## 📑 Specs da Sprint 3
-
-- [Visão geral e decisões](docs/Sprint3/README.md)
-- [Spec do App Cliente](docs/Sprint3/spec_app_cliente.md)
-- [Arquitetura do App Cliente](docs/Sprint3/arquitetura_app_cliente.md)
-- [Plano de Testes e Critérios de Aceite](docs/Sprint3/plano_testes_e_aceite.md)
-
-## 🔧 Dependências
-
-- **Flask** — Framework web HTTP
-- **pika** — Driver AMQP para integração com RabbitMQ
-- **SQLite3** — Banco de dados (já vem com Python)
-
-Veja `requirements.txt` para a versão exata.
-
-## 📝 Notas de Desenvolvimento
-
-- O banco de dados SQLite é inicializado automaticamente no primeiro start
-- Timestamps utilizam formato ISO 8601 (UTC)
-- Todos os erros retornam JSON estruturado com campo `error`
-- A validação de status ocorre na camada de use cases
-- O `InMemoryEventBus` só é habilitado explicitamente com `EVENT_BUS=in_memory` em testes.
-
-## 📋 Sprint 1 — Checklist
-
-- [x] Estrutura de Clean Architecture definida
-- [x] Banco de dados SQLite com schema
-- [x] Modelo de domínio (Entrega + StatusEntrega enum)
-- [x] Repository com CRUD
-- [x] Use cases (lógica de negócio)
-- [x] Flask routes (POST, GET, PATCH)
-- [x] Validação e tratamento de erros
-- [x] Coleção Postman
-- [x] README
-
-## 📋 Sprint 2 — Checklist (MOM)
-
-- [x] Barramento abstrato e implementações (RabbitMQ + Memory para testes)
-- [x] Docker Compose para RabbitMQ local
-- [x] Produtor de eventos integrado aos Use Cases
-- [x] Consumidor standalone com histórico persistente e idempotente
-- [x] Novo endpoint `GET /eventos`
-- [x] Diagrama C4 atualizado com MOM sólido
-- [x] Relatório de integração e catálogo de eventos
-- [x] Fila durável, publisher confirms, ack manual e DLQ
-
-## 📡 Tempo real — WS /ws/eventos (Sprint 4)
-
-Além do REST, o backend expõe um **WebSocket** em `/ws/eventos` para notificação
-assíncrona do app do prestador. Uma **ponte** (thread no Flask) consome os eventos
-do RabbitMQ por uma fila dedicada `fastdelivery.realtime` (ligada ao exchange
-`fastdelivery.events`) e os repassa às conexões WebSocket abertas. Assim, quando o
-cliente cria uma solicitação, o prestador é avisado **na hora**, sem polling.
-
-- A ponte usa uma fila **própria** (não a `fastdelivery.entregas` do
-  `consumer_worker.py`), então não há *competing consumers* — cada um recebe sua
-  cópia via o exchange topic.
-- Exige RabbitMQ no ar e é iniciada junto com `py main.py` (mensagem
-  `Tempo real....: WS /ws/eventos` no log de boot).
-- Os clientes informam a URL via `--dart-define=FASTDELIVERY_WS_URL=ws://10.0.2.2:5055/ws/eventos`
-  (ou ela é derivada de `FASTDELIVERY_API_URL`).
-
-## 📱 Aplicativos Flutter
-
-| App | Pasta | Papel |
-|-----|-------|-------|
-| Cliente | `Code/mobile/fastdelivery_cliente/` | Cria, lista, detalha e cancela entregas. Atualiza por **polling** REST (5s). |
-| Prestador | `Code/mobile/fastdelivery_prestador/` | Recebe solicitações **em tempo real** (WebSocket), aceita/recusa e acompanha as entregas em andamento. |
-
-Os dois apps são **independentes** (executáveis e `applicationId` distintos) e
-seguem a mesma Clean Architecture (`core/`, `features/entregas/{domain,data,application,presentation}`).
-
-## ▶️ Executando o sistema completo (backend + MOM + 2 apps)
-
-```powershell
-# 1. MOM (RabbitMQ)
-cd Code\server
-docker compose up -d
-
-# 2. Backend (REST + producer + ponte WebSocket)
-py main.py
-
-# 3. Consumidor de histórico (processo separado)
-py consumer_worker.py
-
-# 4. App do cliente (em outro terminal)
-cd ..\mobile\fastdelivery_cliente
-flutter run --dart-define=FASTDELIVERY_API_URL=http://10.0.2.2:5055
-
-# 5. App do prestador (em outro terminal)
-cd ..\fastdelivery_prestador
-flutter run `
-  --dart-define=FASTDELIVERY_API_URL=http://10.0.2.2:5055 `
-  --dart-define=FASTDELIVERY_WS_URL=ws://10.0.2.2:5055/ws/eventos
-```
-
-> **Emulador Android:** use `10.0.2.2` (alias do host). **Windows desktop/web:**
-> use `127.0.0.1` no lugar de `localhost` (em algumas máquinas `localhost` resolve
-> primeiro para IPv6 e o servidor de dev escuta em IPv4).
-
-**Fluxo ponta a ponta:** crie uma entrega no app do cliente → ela aparece
-imediatamente no app do prestador (via MOM → WebSocket) → aceite no prestador →
-o cliente reflete o status em até 5s (polling).
-
-## 📚 Próximas Fases / Status
-
-- **Sprint 3:** App Flutter — Cliente (specs em `docs/Sprint3/`) ✅
-- **Sprint 4:** App Flutter — Prestador + notificação assíncrona via MOM
-  (docs em `docs/Sprint4/`) ✅ código | refino visual e relatório final em andamento
 
 ---
 
-**Desenvolvido para:** Lab. de Desenvolvimento de Aplicações Móveis e Distribuídas (LDAMD) — PUC Minas
+## ▶️ Como rodar
+
+### Pré-requisitos
+- Python 3.10+ (testado em 3.14) e Docker/Docker Compose
+- Flutter 3.x / Dart 3.12+ (alvo: emulador Android **ou** Chrome/web)
+- Windows: use `py` (Python Launcher)
+
+### 1) Backend + MOM (3 terminais em `Code/server`)
+
+```powershell
+# Terminal 1 — RabbitMQ (MOM)
+cd Code\server
+docker compose up -d
+
+# Terminal 2 — Backend (REST + producer + ponte WebSocket)
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1            # macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+Copy-Item .env.example .env             # 1ª vez
+python main.py                          # confirme no log: "Tempo real....: WS  /ws/eventos"
+
+# Terminal 3 — Consumidor de histórico (opcional; necessário só para o GET /eventos)
+python consumer_worker.py
+```
+
+O backend sobe em `http://localhost:5055`. RabbitMQ Management: `http://localhost:15672`
+(`guest`/`guest`).
+
+> O `consumer_worker.py` é **opcional** para o fluxo de tempo real (a ponte WebSocket é
+> independente). Ele alimenta o histórico do `GET /eventos`. Alternativa: subir o backend
+> com `RUN_CONSUMER_IN_PROCESS=true` para consumir no próprio processo.
+
+### 2) Apps Flutter (1 terminal cada)
+
+```powershell
+# App do CLIENTE
+cd Code\mobile\fastdelivery_cliente
+flutter pub get
+flutter run -d chrome --dart-define=FASTDELIVERY_API_URL=http://localhost:5055
+# Emulador Android: flutter run --dart-define=FASTDELIVERY_API_URL=http://10.0.2.2:5055
+
+# App do PRESTADOR
+cd ..\fastdelivery_prestador
+flutter pub get
+flutter run -d chrome `
+  --dart-define=FASTDELIVERY_API_URL=http://localhost:5055 `
+  --dart-define=FASTDELIVERY_WS_URL=ws://localhost:5055/ws/eventos
+# Emulador Android: troque por http://10.0.2.2:5055 e ws://10.0.2.2:5055/ws/eventos
+```
+
+> **Endereços:** emulador Android usa `10.0.2.2` (alias do host). Em desktop, se `localhost`
+> falhar (resolve para IPv6 antes do IPv4), use `127.0.0.1`. Se `FASTDELIVERY_WS_URL` não for
+> passada, ela é derivada de `FASTDELIVERY_API_URL`.
+
+**Fluxo ponta a ponta:** crie uma entrega no app do cliente → ela aparece **na hora** no
+app do prestador (MOM → WebSocket) → aceite no prestador → o cliente reflete o status em
+até ~5s (polling).
+
+### Variáveis de ambiente (backend)
+- `EVENT_BUS=rabbitmq` (padrão) | `in_memory` (apenas testes)
+- `RABBITMQ_HOST/PORT/USER/PASS` ou `RABBITMQ_URL`
+- `RUN_CONSUMER_IN_PROCESS=false` (padrão; consumidor é o `consumer_worker.py`)
+- `FASTDELIVERY_API_HOST/PORT` (padrão `0.0.0.0:5055`)
+
+---
+
+## 🔌 API REST + WebSocket
+
+| Método | Rota | Descrição |
+|---|---|---|
+| `POST` | `/entregas` | Cria uma solicitação (status inicial `pendente`) |
+| `GET` | `/entregas` | Lista entregas (filtro opcional `?status=`) |
+| `GET` | `/entregas/<id>` | Detalha uma entrega |
+| `PATCH` | `/entregas/<id>/status` | Atualiza o status (`aceito`/`em_transito`/`concluido`/`cancelado`) |
+| `GET` | `/eventos` | Histórico de eventos processados pelo consumidor (`?ultimos=N`) |
+| `WS` | `/ws/eventos` | Stream de eventos do MOM em tempo real (usado pelo app do prestador) |
+
+```bash
+# Criar
+curl -X POST http://localhost:5055/entregas -H "Content-Type: application/json" \
+  -d '{"descricao":"Buscar encomenda","origem":"Rua A, 100","destino":"Rua B, 200","cliente_id":"cliente-uuid-123"}'
+
+# Listar (com filtro) / detalhar
+curl "http://localhost:5055/entregas?status=pendente"
+curl http://localhost:5055/entregas/1
+
+# Atualizar status (aceitar)
+curl -X PATCH http://localhost:5055/entregas/1/status \
+  -H "Content-Type: application/json" -d '{"status":"aceito"}'
+
+# Histórico de eventos do MOM
+curl http://localhost:5055/eventos
+```
+
+Resposta de uma entrega:
+```json
+{
+  "id": 1, "descricao": "Buscar encomenda", "origem": "Rua A, 100",
+  "destino": "Rua B, 200", "status": "pendente", "cliente_id": "cliente-uuid-123",
+  "criado_em": "2026-05-11T10:00:00", "atualizado_em": "2026-05-11T10:00:00"
+}
+```
+
+Erros sempre em JSON: `{"error": "..."}` (400 validação, 404 não encontrado).
+
+### Eventos do MOM
+- `entrega.criada` — publicado ao criar uma entrega.
+- `entrega.status_atualizado` — publicado ao alterar o status.
+
+Topologia: exchange topic `fastdelivery.events` → filas `fastdelivery.entregas` (durável,
+worker de histórico) e `fastdelivery.realtime` (ponte WebSocket) + DLQ.
+
+---
+
+## 📊 Schema do banco (SQLite)
+
+**`entregas`**
+
+| Campo | Tipo | Restrições |
+|-------|------|-----------|
+| `id` | INTEGER | PK, AUTOINCREMENT |
+| `descricao` / `origem` / `destino` | TEXT | NOT NULL |
+| `status` | TEXT | NOT NULL, DEFAULT `pendente` |
+| `cliente_id` | TEXT | NOT NULL |
+| `criado_em` / `atualizado_em` | TEXT | NOT NULL (ISO 8601) |
+
+Valores de `status`: `pendente` → `aceito` → `em_transito` → `concluido`, e `cancelado`
+(estado final alternativo).
+
+**`eventos_processados`** — histórico persistente do consumidor (chave `evento_id` garante
+idempotência em caso de redelivery); base do `GET /eventos`.
+
+---
+
+## 🧪 Testes
+
+```powershell
+# Backend (em Code/server, com a venv ativa)
+python -m unittest discover -s tests
+
+# Apps Flutter (em cada pasta do app)
+flutter analyze
+flutter test
+```
+
+A API também pode ser testada importando `postman_collection.json` no Postman/Insomnia.
+Evidências de execução: `docs/Image/` (endpoints da Sprint 1) e
+`docs/Sprint4/evidencias/` (fluxo ponta a ponta).
+
+---
+
+## 📚 Documentação por sprint
+
+- **Sprint 2:** [eventos/tópicos](docs/Sprint2/eventos.md) · [relatório](docs/Sprint2/Relatorio_Sprint2_RabbitMQ.md) · [evidências](docs/Sprint2/evidencias/)
+- **Sprint 3:** [relatório de atendimento](docs/Sprint3/relatorio_atendimento_sprint3.md) · [evidências (analyze/test)](docs/Sprint3/evidencias/)
+- **Sprint 4:** [plano e arquitetura](docs/Sprint4/plano_sprint4.md) · [relatório técnico](docs/Sprint4/Relatorio_Sprint4_FastDelivery.pdf) · [roteiro do vídeo](docs/Sprint4/roteiro.md)
+
+---
+
+## 🛠️ Tecnologias
+
+- **Backend:** Flask, pika (AMQP), flask-sock (WebSocket), flask-cors, python-dotenv, SQLite
+- **MOM:** RabbitMQ (Docker)
+- **Mobile:** Flutter/Dart — `http`, `web_socket_channel`, `ChangeNotifier`
+
+---
+
+**Desenvolvido para:** Laboratório de Desenvolvimento de Aplicações Móveis e Distribuídas
+(LDAMD) — PUC Minas.
