@@ -24,6 +24,9 @@ from app.controllers.entrega_controller import entrega_bp, init_use_cases
 from app.mom.barramento import criar_barramento
 from app.mom.consumer import registrar_consumidores
 from app.mom.producer import EntregaEventProducer
+from app.realtime.bridge import iniciar_ponte
+from app.realtime.hub import RealtimeHub
+from app.realtime.ws_routes import registrar_websocket
 
 # ─── Configuração de logging ──────────────────────────────────────────
 
@@ -38,6 +41,13 @@ logger = logging.getLogger('FastDelivery')
 
 app = Flask(__name__)
 app.register_blueprint(entrega_bp)
+
+# ─── Notificação em tempo real (ponte RabbitMQ → WebSocket) ───────────
+# Registrar a rota /ws/eventos é seguro no import (apenas adiciona a rota; não
+# abre conexões). A PONTE (consumidor RabbitMQ) só é iniciada no bloco __main__,
+# para que importar este módulo em testes não exija o broker.
+realtime_hub = RealtimeHub()
+registrar_websocket(app, realtime_hub)
 
 
 @app.errorhandler(404)
@@ -114,16 +124,33 @@ if __name__ == '__main__':
     # bloqueia, então a inicialização é uniforme para qualquer mecanismo.
     _iniciar_mom()
 
+    # 3. Ponte de tempo real: consumidor RabbitMQ dedicado que repassa os eventos
+    # às conexões WebSocket (notificação assíncrona do prestador, sem polling).
+    if barramento.nome == 'rabbitmq':
+        iniciar_ponte(realtime_hub)
+    else:
+        logger.info(
+            'Ponte WebSocket DESLIGADA (barramento=%s): o tempo real exige RabbitMQ.',
+            barramento.nome,
+        )
+
     logger.info('╔══════════════════════════════════════════════╗')
     logger.info('║       FastDelivery — Backend REST + MOM      ║')
     logger.info('║  Mecanismo MOM.: %-26s ║', barramento.nome)
     logger.info('║  Endpoint......: %-28s ║', API_PUBLIC_URL)
     logger.info('║  Eventos MOM...: GET /eventos                ║')
+    logger.info('║  Tempo real....: WS  /ws/eventos             ║')
     logger.info('╚══════════════════════════════════════════════╝')
     logger.info(
         'Consumidor in-process: %s',
         'ON' if RUN_CONSUMER_IN_PROCESS else 'OFF (use consumer_worker.py)',
     )
 
-    app.run(host=API_HOST, port=API_PORT, debug=True, use_reloader=False)
+    # threaded=True: cada conexão WebSocket (/ws/eventos) fica em sua própria
+    # thread no servidor de desenvolvimento — exigido pelo flask-sock para
+    # atender vários clientes simultâneos sem bloquear as rotas REST.
+    app.run(
+        host=API_HOST, port=API_PORT, debug=True,
+        use_reloader=False, threaded=True,
+    )
     # use_reloader=False evita que threads MOM sejam duplicadas no reload
