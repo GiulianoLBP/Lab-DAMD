@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'core/theme/app_theme.dart';
 import 'features/entregas/data/entrega_api_service.dart';
 import 'features/entregas/data/eventos_realtime_service.dart';
 import 'features/entregas/presentation/screens/home_screen.dart';
@@ -47,11 +48,8 @@ class _PrestadorAppState extends State<PrestadorApp> {
     return MaterialApp(
       title: 'FastDelivery Prestador',
       debugShowCheckedModeBanner: false,
-      // Mesma identidade visual do app cliente (a Fase 2 centraliza o tema).
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2563EB)),
-        scaffoldBackgroundColor: const Color(0xFFF6F7F9),
-      ),
+      // Mesmo tema central do app cliente (coerência visual entre os dois apps).
+      theme: AppTheme.light,
       home: HomeScreen(service: _service, realtime: _realtime),
     );
   }
