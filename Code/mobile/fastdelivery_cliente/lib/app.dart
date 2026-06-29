@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'core/theme/app_theme.dart';
 import 'features/entregas/data/entrega_api_service.dart';
 import 'features/entregas/presentation/screens/entrega_list_screen.dart';
 
@@ -32,10 +33,7 @@ class _FastDeliveryAppState extends State<FastDeliveryApp> {
     return MaterialApp(
       title: 'FastDelivery',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2563EB)),
-        scaffoldBackgroundColor: const Color(0xFFF6F7F9),
-      ),
+      theme: AppTheme.light,
       home: EntregaListScreen(service: _service),
     );
   }
