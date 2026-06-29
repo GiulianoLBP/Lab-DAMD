@@ -10,9 +10,9 @@ Documentação da Sprint 4 do projeto **FastDelivery** (LDAMD — PUC Minas).
 
 | Item | Status |
 |---|---|
-| App Flutter do prestador (≥3 telas) | em desenvolvimento |
-| Notificação assíncrona via MOM (WebSocket) | em desenvolvimento |
-| Fluxo ponta a ponta cliente ↔ prestador | em desenvolvimento |
-| Refino visual dos dois apps (Fase 2) | pendente |
+| App Flutter do prestador (≥3 telas) | ✅ código (analyze limpo, testes ok, build ok) |
+| Notificação assíncrona via MOM (WebSocket) | ✅ ponte verificada com broker real |
+| Fluxo ponta a ponta cliente ↔ prestador | ⏳ validação ao vivo com os dois apps |
+| Refino visual dos dois apps (Fase 2) | pendente (após revisão da Fase 1) |
 | Screencast 3–5 min | pendente |
 | Relatório técnico final (≥4 págs, ≥3 refs) | pendente |
