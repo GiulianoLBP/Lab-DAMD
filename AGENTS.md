@@ -55,6 +55,27 @@ Sprint 3 is scoped to the **client** Flutter app only. Follow the specs in
 - Use a fixed demo `cliente_id` until authentication is introduced in a future scope.
 - Do not implement prestador/entregador workflows in the client app; those belong to Sprint 4.
 
+## Sprint 4 / Flutter Prestador + Tempo Real
+
+Sprint 4 adds the **provider** Flutter app and **real-time** notification. Specs in `docs/Sprint4/`.
+
+- `Code/mobile/fastdelivery_prestador/`: separate, independently runnable Flutter app
+  (distinct `applicationId`), same Clean Architecture as the client. Reuses the existing
+  REST contracts (no new endpoints) — provider actions are all `PATCH /entregas/<id>/status`
+  (`aceitar`→aceito, `recusar`→**cancelado**, `iniciarTransito`→em_transito, `concluir`→concluido).
+  It copies the small domain/data/core files from the client (apps stay decoupled).
+- Real-time bridge (backend, `Code/server/app/realtime/`): a dedicated RabbitMQ consumer
+  (`bridge.py`) reads the `fastdelivery.realtime` queue (its own queue bound to the
+  `fastdelivery.events` topic exchange — **not** `fastdelivery.entregas`, to avoid competing
+  with `consumer_worker.py`) and fans events out to WebSocket clients via `hub.py` +
+  `ws_routes.py` (flask-sock, route `/ws/eventos`). Started only from `main.py`'s `__main__`
+  (so importing `app` in tests needs no broker); requires `EVENT_BUS=rabbitmq`.
+- The provider app consumes `/ws/eventos` with `web_socket_channel` (auto-reconnect + REST
+  re-sync on reconnect). Do not connect the mobile app directly to RabbitMQ; the broker stays
+  behind the backend bridge.
+- Dependency added: `flask-sock` (backend, in `requirements.txt`). The client app is not
+  modified by Sprint 4 (Phase 1).
+
 ## Build, Test, and Development Commands
 
 Run commands from `Code/server/` unless noted otherwise.

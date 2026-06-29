@@ -441,10 +441,69 @@ Veja `requirements.txt` para a versão exata.
 - [x] Relatório de integração e catálogo de eventos
 - [x] Fila durável, publisher confirms, ack manual e DLQ
 
-## 📚 Próximas Fases
+## 📡 Tempo real — WS /ws/eventos (Sprint 4)
 
-**Sprint 3:** App Flutter — Cliente (specs em `docs/Sprint3/`)
-**Sprint 4:** App Flutter — Entregador + Relatório Final
+Além do REST, o backend expõe um **WebSocket** em `/ws/eventos` para notificação
+assíncrona do app do prestador. Uma **ponte** (thread no Flask) consome os eventos
+do RabbitMQ por uma fila dedicada `fastdelivery.realtime` (ligada ao exchange
+`fastdelivery.events`) e os repassa às conexões WebSocket abertas. Assim, quando o
+cliente cria uma solicitação, o prestador é avisado **na hora**, sem polling.
+
+- A ponte usa uma fila **própria** (não a `fastdelivery.entregas` do
+  `consumer_worker.py`), então não há *competing consumers* — cada um recebe sua
+  cópia via o exchange topic.
+- Exige RabbitMQ no ar e é iniciada junto com `py main.py` (mensagem
+  `Tempo real....: WS /ws/eventos` no log de boot).
+- Os clientes informam a URL via `--dart-define=FASTDELIVERY_WS_URL=ws://10.0.2.2:5055/ws/eventos`
+  (ou ela é derivada de `FASTDELIVERY_API_URL`).
+
+## 📱 Aplicativos Flutter
+
+| App | Pasta | Papel |
+|-----|-------|-------|
+| Cliente | `Code/mobile/fastdelivery_cliente/` | Cria, lista, detalha e cancela entregas. Atualiza por **polling** REST (5s). |
+| Prestador | `Code/mobile/fastdelivery_prestador/` | Recebe solicitações **em tempo real** (WebSocket), aceita/recusa e acompanha as entregas em andamento. |
+
+Os dois apps são **independentes** (executáveis e `applicationId` distintos) e
+seguem a mesma Clean Architecture (`core/`, `features/entregas/{domain,data,application,presentation}`).
+
+## ▶️ Executando o sistema completo (backend + MOM + 2 apps)
+
+```powershell
+# 1. MOM (RabbitMQ)
+cd Code\server
+docker compose up -d
+
+# 2. Backend (REST + producer + ponte WebSocket)
+py main.py
+
+# 3. Consumidor de histórico (processo separado)
+py consumer_worker.py
+
+# 4. App do cliente (em outro terminal)
+cd ..\mobile\fastdelivery_cliente
+flutter run --dart-define=FASTDELIVERY_API_URL=http://10.0.2.2:5055
+
+# 5. App do prestador (em outro terminal)
+cd ..\fastdelivery_prestador
+flutter run `
+  --dart-define=FASTDELIVERY_API_URL=http://10.0.2.2:5055 `
+  --dart-define=FASTDELIVERY_WS_URL=ws://10.0.2.2:5055/ws/eventos
+```
+
+> **Emulador Android:** use `10.0.2.2` (alias do host). **Windows desktop/web:**
+> use `127.0.0.1` no lugar de `localhost` (em algumas máquinas `localhost` resolve
+> primeiro para IPv6 e o servidor de dev escuta em IPv4).
+
+**Fluxo ponta a ponta:** crie uma entrega no app do cliente → ela aparece
+imediatamente no app do prestador (via MOM → WebSocket) → aceite no prestador →
+o cliente reflete o status em até 5s (polling).
+
+## 📚 Próximas Fases / Status
+
+- **Sprint 3:** App Flutter — Cliente (specs em `docs/Sprint3/`) ✅
+- **Sprint 4:** App Flutter — Prestador + notificação assíncrona via MOM
+  (docs em `docs/Sprint4/`) ✅ código | refino visual e relatório final em andamento
 
 ---
 
