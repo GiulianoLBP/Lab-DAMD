@@ -1,0 +1,21 @@
+name: fastdelivery_prestador
+description: "FastDelivery — app prestador (Sprint 4): recebe solicitações em tempo real (WebSocket), aceita/recusa e acompanha entregas via API REST."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.0                 # mesmas chamadas REST do app cliente
+  web_socket_channel: ^3.0.0  # notificação assíncrona em tempo real (/ws/eventos)
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
