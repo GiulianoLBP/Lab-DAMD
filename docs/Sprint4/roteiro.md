@@ -155,17 +155,34 @@ Concluído** (sem atualizar manualmente).
 **Destacar:** o fluxo de status completo `pendente → aceito → em_transito → concluido`.
 
 ### Cena 7 — Evidência do MOM (3:45–4:10)
-**Falar:** "Por baixo, tudo passou pelo MOM. No RabbitMQ vemos o exchange e as
-filas; e o endpoint de eventos mostra o histórico processado."
-**Fazer:**
-1. **RabbitMQ UI** (http://localhost:15672 → aba **Queues and Streams**):
-   apontar o exchange `fastdelivery.events` e as filas `fastdelivery.entregas`
-   (histórico) e `fastdelivery.realtime` (ponte do WebSocket); comentar os
-   contadores de mensagens.
-2. **GET /eventos** (http://localhost:5055/eventos): mostrar os registros
-   `entrega.criada` e `entrega.status_atualizado` processados.
-**Destacar:** "duas filas diferentes ligadas ao mesmo exchange — a do worker de
-histórico e a da notificação em tempo real, sem competir entre si".
+> **Atenção:** as colunas "Messages" (Ready/Unacked/Total) mostram o que está
+> **parado na fila agora**, não o total que já passou. Com os consumidores (a
+> ponte e o worker) consumindo na hora, é **normal e saudável** ver tudo **0**.
+> Ver as **3 filas criadas e `running`** (com `D`/`DLX` na `fastdelivery.entregas`
+> e `AD` na `fastdelivery.realtime`) já prova a topologia. Para mostrar tráfego,
+> use uma das opções abaixo.
+
+**Falar:** "As filas do RabbitMQ estão criadas e ativas; elas ficam zeradas
+porque os consumidores processam na hora. O histórico persistente dos eventos
+está no endpoint `/eventos`."
+**Fazer (escolha 1 e/ou 2):**
+1. **Histórico — recomendado:** abrir http://localhost:5055/eventos e mostrar os
+   registros `entrega.criada` e `entrega.status_atualizado` já processados.
+   - Se vier **vazio**: o consumidor não rodou. Rode `consumer_worker.py` (ou
+     suba o backend com `RUN_CONSUMER_IN_PROCESS=true`) e crie uma nova entrega.
+2. **Ao vivo no RabbitMQ:** clicar no **nome** da fila `fastdelivery.realtime`
+   → a página da fila mostra o gráfico **Message rates** e a seção **Consumers**
+   (a ponte WebSocket aparece conectada). Com isso aberto, criar uma entrega no
+   cliente e mostrar o **pico de "incoming"**.
+
+**Opcional (demonstra o desacoplamento do MOM):** pausar o `consumer_worker.py`,
+criar 2–3 entregas → em `fastdelivery.entregas` o **"Ready" sobe** (mensagens
+aguardando); religar o worker → **"Ready" volta a 0** (consumidas). Prova que
+produtor e consumidor são independentes, ligados só pelo broker.
+
+**Destacar:** o exchange `fastdelivery.events` com **duas filas** sem competir —
+`fastdelivery.entregas` (worker/histórico) e `fastdelivery.realtime` (ponte do
+WebSocket) — e o histórico persistente em `/eventos`.
 
 ### Cena 8 — Encerramento (4:10–4:20)
 **Falar:** "Resumindo: arquitetura orientada a eventos com MOM (RabbitMQ),
